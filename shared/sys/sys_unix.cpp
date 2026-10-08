@@ -58,10 +58,15 @@ void Sys_PlatformInit( int argc, char *argv[] )
 	signal( SIGABRT, Sys_SigHandler );
 	signal( SIGBUS, Sys_SigHandler );
 
+#ifdef __EMSCRIPTEN__
+	// there is no terminal; reading stdin would open a window.prompt() dialog
+	stdinIsATTY = qfalse;
+#else
 	if (isatty( STDIN_FILENO ) && !( term && ( !strcmp( term, "raw" ) || !strcmp( term, "dumb" ) ) ))
 		stdinIsATTY = qtrue;
 	else
 		stdinIsATTY = qfalse;
+#endif
 
 	// raise open file limit to allow more pk3 files
 	int retval;

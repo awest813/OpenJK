@@ -23,7 +23,7 @@
 
 # This only has effect in this directory (lib/png).
 include_directories(include/)
-if(WIN32)
+if(UseInternalZlib)
 	include_directories(../zlib/include/)
 endif()
 

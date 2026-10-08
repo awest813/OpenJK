@@ -89,6 +89,23 @@ option(UseInternalPNG    "If set, use bundled libpng."  ${UseInternalPNGDefault}
 option(UseInternalJPEG   "If set, use bundled libjpeg." ${UseInternalJPEGDefault})
 option(UseInternalSDL2   "If set, use bundled SDL2."    ${UseInternalSDL2Default})
 
+# Web (Emscripten) builds: only the SP client is supported so far, everything
+# is statically linked into a single wasm module, and SDL2 comes from the
+# Emscripten port. See docs/web-port-plan.md.
+if(EMSCRIPTEN)
+  foreach(WebUnsupported
+      BuildMPEngine BuildMPRdVanilla BuildMPDed BuildMPGame BuildMPCGame
+      BuildMPUI BuildMPRend2 BuildJK2SPEngine BuildJK2SPGame
+      BuildJK2SPRdVanilla BuildTests BuildSymbolServer)
+    set(${WebUnsupported} OFF CACHE BOOL "" FORCE)
+  endforeach()
+  set(UseInternalOpenAL OFF CACHE BOOL "" FORCE)
+  set(UseInternalZlib   ON  CACHE BOOL "" FORCE)
+  set(UseInternalPNG    ON  CACHE BOOL "" FORCE)
+  set(UseInternalJPEG   ON  CACHE BOOL "" FORCE)
+  set(UseInternalSDL2   OFF CACHE BOOL "" FORCE)
+endif()
+
 # This option won't appear on non-Apple platforms.
 if(APPLE)
   option(MakeApplicationBundles "Whether to build .app application bundles for engines built" ON)
@@ -116,7 +133,10 @@ endif()
 #=============================================================================
 # ${Architecture} must match ARCH_STRING in q_platform.h,
 # and is used in DLL names (jagamex86.dll, jagamex86.dylib, jagamei386.so).
-if(WIN32)
+if(EMSCRIPTEN)
+	set(X86 OFF)
+	set(Architecture "wasm32")
+elseif(WIN32)
 	set(X86 ON)
 	if(CMAKE_SIZEOF_VOID_P MATCHES "8")
 		set(Architecture "x86_64")
@@ -320,6 +340,24 @@ else()
 	message(ERROR "Unsupported compiler")
 endif()
 
+if(EMSCRIPTEN)
+	# Com_Error is implemented with C++ exceptions; SDL2, WebGL and audio
+	# come from Emscripten's ports and JS libraries.
+	set(OPENJK_WEB_FLAGS "-fwasm-exceptions -sUSE_SDL=2")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OPENJK_WEB_FLAGS}")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OPENJK_WEB_FLAGS}")
+	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OPENJK_WEB_FLAGS}")
+
+	# Renderer and game modules are linked into the engine instead of being
+	# dlopen()ed; see shared/sys/sys_static_modules.cpp.
+	set(OpenJKStaticModules ON)
+	set(OpenJKModuleLibraryType STATIC)
+	set(SharedDefines ${SharedDefines} "OPENJK_STATIC_MODULES")
+else()
+	set(OpenJKStaticModules OFF)
+	set(OpenJKModuleLibraryType SHARED)
+endif()
+
 set(SharedDefines ${SharedDefines} "$<$<CONFIG:Debug>:_DEBUG>")
 set(SharedDefines ${SharedDefines} "$<$<NOT:$<CONFIG:Debug>>:FINAL_BUILD>")
 
@@ -385,6 +423,24 @@ set(SharedCommonSafeFiles
 	"${SharedDir}/qcommon/safe/limited_vector.h"
 	)
 
+# When modules are statically linked into the engine, code shared between the
+# engine and a module is only linked once (by the engine), and the few
+# conflicting globals are renamed with a per-module prefix.
+function(openjk_static_module Target Prefix)
+	get_target_property(Sources ${Target} SOURCES)
+	foreach(Source ${Sources})
+		if(Source MATCHES "/(q_math|q_color|q_string)\\.c$"
+				OR Source MATCHES "/(q_shared|genericparser2)\\.cpp$"
+				OR Source MATCHES "/qcommon/safe/(string|files)\\.cpp$")
+			list(REMOVE_ITEM Sources ${Source})
+		endif()
+	endforeach()
+	set_property(TARGET ${Target} PROPERTY SOURCES ${Sources})
+	set_property(TARGET ${Target} APPEND PROPERTY COMPILE_DEFINITIONS "OPENJK_MODULE_PREFIX=${Prefix}")
+	set_property(TARGET ${Target} APPEND PROPERTY COMPILE_OPTIONS
+		"SHELL:-include ${SharedDir}/qcommon/q_static_module.h")
+endfunction()
+
 #=============================================================================
 #
 # Adding all of the projects
@@ -397,6 +453,12 @@ else()
 endif()
 
 if(UseInternalZlib)
+  if(UNIX)
+    # zlib's gz* functions need unistd.h. This also changes z_off_t from long
+    # to off_t, so it must be the same for zlib and everything using it (SDL's
+    # headers define HAVE_UNISTD_H, which has the same effect).
+    add_definitions(-DZ_HAVE_UNISTD_H)
+  endif()
   add_subdirectory(lib/zlib)
 else()
   find_package(ZLIB REQUIRED)

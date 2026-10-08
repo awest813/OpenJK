@@ -373,7 +373,7 @@ if(WIN32)
 	set(SPGameFiles ${SPGameFiles} ${SPGameWin32Files})
 endif(WIN32)
 
-add_library(${SPGame} SHARED ${SPGameFiles})
+add_library(${SPGame} ${OpenJKModuleLibraryType} ${SPGameFiles})
 
 # Hide symbols not explicitly marked public.
 set_property(TARGET ${SPGame} APPEND PROPERTY COMPILE_OPTIONS ${OPENJK_VISIBILITY_FLAGS})
@@ -383,7 +383,9 @@ if(NOT MSVC)
 	set_target_properties(${SPGame} PROPERTIES PREFIX "")
 endif()
 
-if(WIN32)
+if(EMSCRIPTEN)
+	# linked into the engine
+elseif(WIN32)
 	install(TARGETS ${SPGame}
 		RUNTIME
 		DESTINATION "${JKAInstallDir}/OpenJK"
@@ -403,6 +405,9 @@ else(WIN32)
 endif()
 
 set_target_properties(${SPGame} PROPERTIES COMPILE_DEFINITIONS "${SPGameDefines}")
+if(OpenJKStaticModules)
+	openjk_static_module(${SPGame} game_)
+endif()
 set_target_properties(${SPGame} PROPERTIES INCLUDE_DIRECTORIES "${SPGameIncludeDirectories}")
 set_target_properties(${SPGame} PROPERTIES PROJECT_LABEL "SP Game Library")
 # no libraries used

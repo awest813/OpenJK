@@ -32,6 +32,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 // Prevent OS X headers from including its own glext header
 #	define GL_GLEXT_LEGACY
 #	include <OpenGL/gl.h>
+#elif defined( __EMSCRIPTEN__ )
+#	include <GL/gl.h>
 #elif defined( __linux__ )
 #	include <GL/gl.h>
 #	include <GL/glx.h>
@@ -434,3 +436,30 @@ extern PFNGLISPROGRAMARBPROC qglIsProgramARB;
 
 extern PFNGLLOCKARRAYSEXTPROC qglLockArraysEXT;
 extern PFNGLUNLOCKARRAYSEXTPROC qglUnlockArraysEXT;
+
+#ifdef __EMSCRIPTEN__
+// Emscripten's fixed-function GL emulation doesn't implement these. They are
+// only reached through NV_register_combiners, display list surfaces and
+// r_primitives 1, none of which are used on WebGL.
+#undef qglArrayElement
+#undef qglCallList
+#undef qglDeleteLists
+#undef qglEndList
+#undef qglGenLists
+#undef qglNewList
+static inline void APIENTRY qglArrayElement( GLint i ) {}
+static inline void qglCallList( GLuint list ) {}
+static inline void qglDeleteLists( GLuint list, GLsizei range ) {}
+static inline void qglEndList( void ) {}
+static inline GLuint qglGenLists( GLsizei range ) { return 0; }
+static inline void qglNewList( GLuint list, GLenum mode ) {}
+
+// WebGL 1 has neither sized internal formats (GL_RGB8, GL_RGBA4, ...) nor
+// compression on upload: the internal format has to match the pixel data.
+#undef qglTexImage2D
+static inline void qglTexImage2D( GLenum target, GLint level, GLint internalformat, GLsizei width,
+	GLsizei height, GLint border, GLenum format, GLenum type, const GLvoid *pixels )
+{
+	glTexImage2D( target, level, format, width, height, border, format, type, pixels );
+}
+#endif

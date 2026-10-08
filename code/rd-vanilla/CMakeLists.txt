@@ -149,20 +149,24 @@ if(BuildSPRdVanilla OR BuildJK2SPRdVanilla)
 	source_group("rd-common" FILES ${SPRDVanillaRdCommonFiles})
 	set(SPRDVanillaFiles ${SPRDVanillaFiles} ${SPRDVanillaRdCommonFiles})
 
-	find_package(OpenGL REQUIRED)
-	set(SPRDVanillaRendererIncludeDirectories ${SPRDVanillaRendererIncludeDirectories} ${OPENGL_INCLUDE_DIR})
-	set(SPRDVanillaRendererLibraries ${SPRDVanillaRendererLibraries} ${OPENGL_LIBRARIES})
+	if(NOT EMSCRIPTEN)
+		find_package(OpenGL REQUIRED)
+		set(SPRDVanillaRendererIncludeDirectories ${SPRDVanillaRendererIncludeDirectories} ${OPENGL_INCLUDE_DIR})
+		set(SPRDVanillaRendererLibraries ${SPRDVanillaRendererLibraries} ${OPENGL_LIBRARIES})
+	endif()
 
 	set(SPRDVanillaRendererIncludeDirectories ${SPRDVanillaRendererIncludeDirectories} ${OpenJKLibDir})
 
 	function(add_sp_renderer_project ProjectName Label EngineName InstallDir Component)
-		add_library(${ProjectName} SHARED ${SPRDVanillaFiles})
+		add_library(${ProjectName} ${OpenJKModuleLibraryType} ${SPRDVanillaFiles})
 		if(NOT MSVC)
 			# remove "lib" prefix for .so/.dylib files
 			set_target_properties(${ProjectName} PROPERTIES PREFIX "")
 		endif()
 
-		if(WIN32)
+		if(EMSCRIPTEN)
+			# linked into the engine
+		elseif(WIN32)
 			install(TARGETS ${ProjectName}
 				RUNTIME
 				DESTINATION ${InstallDir}
@@ -182,6 +186,9 @@ if(BuildSPRdVanilla OR BuildJK2SPRdVanilla)
 		endif()
 
 		set_target_properties(${ProjectName} PROPERTIES COMPILE_DEFINITIONS "${SPRDVanillaDefines}")
+		if(OpenJKStaticModules)
+			openjk_static_module(${ProjectName} renderer_)
+		endif()
 
 		# Hide symbols not explicitly marked public.
 		set_property(TARGET ${ProjectName} APPEND PROPERTY COMPILE_OPTIONS ${OPENJK_VISIBILITY_FLAGS})

@@ -47,7 +47,7 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 
 	#    Dependencies
 
-	if (NOT WIN32)
+	if (NOT WIN32 AND NOT EMSCRIPTEN)
 		# OpenGL
 		find_package(OpenGL REQUIRED)
 		set(SPEngineIncludeDirectories ${SPEngineIncludeDirectories} ${OPENGL_INCLUDE_DIR})
@@ -78,7 +78,18 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 		set(SPEngineFiles ${SPEngineFiles} ${SPEngineEAXFiles})
 	endif()
 
-	if(UseInternalSDL2)
+	if(EMSCRIPTEN)
+		# SDL2 is provided by -sUSE_SDL=2. rd-vanilla is a fixed-function
+		# OpenGL renderer, which only runs on WebGL via Emscripten's emulation.
+		set(SPEngineLibraries ${SPEngineLibraries}
+			"-sLEGACY_GL_EMULATION=1"
+			"-sGL_UNSAFE_OPTS=0"
+			"-sALLOW_MEMORY_GROWTH=1"
+			# lets the hosting page put game data into the virtual filesystem
+			"-sFORCE_FILESYSTEM=1"
+			"-sEXPORTED_RUNTIME_METHODS=FS"
+			)
+	elseif(UseInternalSDL2)
 		if(CMAKE_SIZEOF_VOID_P EQUAL 4)
 			set(SPEngineLibraries
 				${SPEngineLibraries}
@@ -354,12 +365,23 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 			"${SharedDir}/sys/sys_win32.cpp"
 			"${SharedDir}/sys/con_passive.cpp"
 			)
+	elseif(EMSCRIPTEN)
+		# no terminal in a browser
+		set(SPEngineSysFiles
+			${SPEngineSysFiles}
+			"${SharedDir}/sys/sys_unix.cpp"
+			"${SharedDir}/sys/con_passive.cpp"
+			)
 	else()
 		set(SPEngineSysFiles
 			${SPEngineSysFiles}
 			"${SharedDir}/sys/sys_unix.cpp"
 			"${SharedDir}/sys/con_tty.cpp"
 			)
+	endif()
+
+	if(OpenJKStaticModules)
+		set(SPEngineSysFiles ${SPEngineSysFiles} "${SharedDir}/sys/sys_static_modules.cpp")
 	endif()
 
 	source_group("sys" FILES ${SPEngineSysFiles})
@@ -443,13 +465,23 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 		if(SPEngineLibraries)
 			target_link_libraries(${ProjectName} ${SPEngineLibraries})
 		endif(SPEngineLibraries)
+
+		if(EMSCRIPTEN)
+			# emit an HTML page to host the engine next to the .js/.wasm
+			set_target_properties(${ProjectName} PROPERTIES SUFFIX ".html")
+		endif()
+
+		if(OpenJKStaticModules)
+			# whole-archive keeps the modules intact, as a shared library would be
+			target_link_libraries(${ProjectName} "-Wl,--whole-archive" ${ARGN} "-Wl,--no-whole-archive")
+		endif()
 	endfunction(add_sp_project)
 	if(BuildSPEngine)
-		add_sp_project(${SPEngine} "SP Client" ${SPDir} ${JKAInstallDir} ${JKASPClientComponent})
+		add_sp_project(${SPEngine} "SP Client" ${SPDir} ${JKAInstallDir} ${JKASPClientComponent} ${SPGame} ${SPRDVanillaRenderer})
 	endif(BuildSPEngine)
 	if(BuildJK2SPEngine)
 		set(SPEngineDefines ${SPEngineDefines} "JK2_MODE")
-		add_sp_project(${JK2SPEngine} "JK2 SP Client" ${JK2SPDir} ${JK2InstallDir} ${JK2SPClientComponent})
+		add_sp_project(${JK2SPEngine} "JK2 SP Client" ${JK2SPDir} ${JK2InstallDir} ${JK2SPClientComponent} ${JK2SPGame} ${JK2SPVanillaRenderer})
 	endif(BuildJK2SPEngine)
 
 endif(BuildSPEngine OR BuildJK2SPEngine)

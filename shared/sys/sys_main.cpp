@@ -32,6 +32,10 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "sys_public.h"
 #include "con_local.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 static char binaryPath[ MAX_OSPATH ] = { 0 };
 static char installPath[ MAX_OSPATH ] = { 0 };
 
@@ -742,6 +746,34 @@ char *Sys_StripAppBundle( char *dir )
 #	endif
 #endif
 
+static void Sys_Frame( void )
+{
+	if ( com_busyWait->integer )
+	{
+		bool shouldSleep = false;
+
+#if !defined(_JK2EXE)
+		if ( com_dedicated->integer )
+		{
+			shouldSleep = true;
+		}
+#endif
+
+		if ( com_minimized->integer )
+		{
+			shouldSleep = true;
+		}
+
+		if ( shouldSleep )
+		{
+			Sys_Sleep( 5 );
+		}
+	}
+
+	// run the game
+	Com_Frame();
+}
+
 int main ( int argc, char* argv[] )
 {
 	int		i;
@@ -790,34 +822,17 @@ int main ( int argc, char* argv[] )
 	Com_Printf( "SDL Version Linked: %d.%d.%d\n", linked.major, linked.minor, linked.patch );
 #endif
 
+#ifdef __EMSCRIPTEN__
+	// the browser drives the main game loop (requestAnimationFrame); this
+	// doesn't return
+	emscripten_set_main_loop( Sys_Frame, 0, 1 );
+#else
 	// main game loop
 	while (1)
 	{
-		if ( com_busyWait->integer )
-		{
-			bool shouldSleep = false;
-
-#if !defined(_JK2EXE)
-			if ( com_dedicated->integer )
-			{
-				shouldSleep = true;
-			}
-#endif
-
-			if ( com_minimized->integer )
-			{
-				shouldSleep = true;
-			}
-
-			if ( shouldSleep )
-			{
-				Sys_Sleep( 5 );
-			}
-		}
-
-		// run the game
-		Com_Frame();
+		Sys_Frame();
 	}
+#endif
 
 	// never gets here
 	return 0;

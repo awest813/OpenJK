@@ -21,7 +21,19 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
-#ifdef DEDICATED
+#if defined(OPENJK_STATIC_MODULES)
+	// modules are linked into the engine, see sys_static_modules.cpp
+#	ifndef DEDICATED
+#		include <SDL.h>
+#	endif
+	void *Sys_StaticLoadLibrary( const char *path );
+	void *Sys_StaticLoadFunction( void *handle, const char *name );
+	const char *Sys_StaticLibraryError( void );
+#	define Sys_LoadLibrary(f) Sys_StaticLoadLibrary(f)
+#	define Sys_UnloadLibrary(h) ((void)(h))
+#	define Sys_LoadFunction(h,fn) Sys_StaticLoadFunction(h,fn)
+#	define Sys_LibraryError() Sys_StaticLibraryError()
+#elif defined(DEDICATED)
 #	ifdef _WIN32
 #		include <windows.h>
 #		define Sys_LoadLibrary(f) (void*)LoadLibrary(f)

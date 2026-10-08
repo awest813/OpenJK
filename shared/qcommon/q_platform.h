@@ -115,6 +115,22 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
     #define DLL_EXT ".dylib"
 
+// Web (Emscripten)
+#elif defined(__EMSCRIPTEN__)
+
+	#define OS_STRING "emscripten"
+	#define QINLINE inline
+	#define PATH_SEP '/'
+
+	#if !defined(ARCH_STRING)
+		#error ARCH_STRING should be defined by the build system
+	#endif
+
+	#define Q3_LITTLE_ENDIAN
+
+	// modules are statically linked, but DLL names are still built from this
+	#define DLL_EXT ".wasm"
+
 // Linux
 #elif defined(__linux__) || defined(__FreeBSD_kernel__)
 

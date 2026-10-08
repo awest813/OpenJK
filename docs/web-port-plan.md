@@ -4,6 +4,72 @@ Goal: run OpenJK (Jedi Academy SP first, then MP) in a browser using
 Emscripten → WebAssembly + WebGL2, with the user supplying their own
 retail assets.
 
+## Status
+
+Phase 0 is done and Phase 1 is underway. The JA single-player engine,
+`jagame` and `rdsp-vanilla` build with Emscripten into one
+`openjk_sp.wasm32.{html,js,wasm}`. In a browser it starts, mounts the
+virtual filesystem, statically "loads" the renderer, creates a WebGL
+context through Emscripten's GL emulation and initialises the renderer. It
+hasn't been run with game data yet.
+
+### Building
+
+```sh
+# with the Emscripten SDK activated (emsdk_env.sh)
+emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
+cmake --build build-web -j
+```
+
+Serve `build-web/` over HTTP and open `openjk_sp.wasm32.html`. The default
+Emscripten page has no game data. To test, use a page that sets
+`Module.arguments` (e.g. `+set fs_basepath /game`) and writes files into
+`Module.FS` from `Module.preRun` (`FS` is exported for this).
+
+### What the web build changes
+
+- `CMakeLists.txt`: `wasm32` architecture; on Emscripten only the SP client
+  is built, with bundled zlib/png/jpeg and SDL2 from `-sUSE_SDL=2`;
+  `-fwasm-exceptions` for `Com_Error`; modules are built as static libraries
+  (`OpenJKModuleLibraryType`) and `OPENJK_STATIC_MODULES` is defined.
+- Static modules (see §3.1): `shared/sys/sys_static_modules.cpp` replaces
+  `dlopen`/`dlsym` behind the existing `Sys_LoadLibrary` /
+  `Sys_LoadFunction` macros, so the library search code doesn't change.
+  Code shared by the engine and a module (q_math, q_shared, safe/string,
+  safe/files, genericparser2) is linked once. The 13 globals that the
+  engine and a module both define with different meanings are renamed per
+  module by the forced-include header `shared/qcommon/q_static_module.h`.
+- `shared/sys/sys_main.cpp`: the loop body is now `Sys_Frame()`, which
+  `emscripten_set_main_loop` drives on web.
+- `shared/qcommon/q_platform.h`: `__EMSCRIPTEN__` platform block.
+- Console: the web build uses `con_passive.cpp` and never treats stdin as
+  a TTY, because Emscripten implements stdin reads with `window.prompt()`.
+- rd-vanilla on WebGL:
+  - texture names come from `glGenTextures`, because WebGL can't bind
+    names the app made up;
+  - `qglTexImage2D` sets the internal format to the pixel format, because
+    WebGL 1 has no sized formats and no compression on upload;
+  - the dynamic glow textures are only created when glow is supported,
+    since it needs rectangle textures;
+  - `glDrawElements` is always used, and display lists /
+    `glArrayElement` are stubbed (only reachable through NV combiners).
+- Bundled zlib: `Z_HAVE_UNISTD_H` is now defined for zlib and all its
+  users. Before this, files that included SDL (which defines
+  `HAVE_UNISTD_H`) saw a 64-bit `z_off_t` while minizip saw a 32-bit one.
+  That was a wasm signature mismatch on `unztell`, i.e. a runtime trap.
+- CI: `web` job in `.github/workflows/build.yml`.
+
+### Known issues / next up
+
+- Run with real assets: menu, then a map (Phase 1 exit criteria).
+- Emscripten GL emulation warnings: `glShadeModel` TODO, an unhandled
+  `glTexEnvf` pname, one `texParameter` call with no texture bound.
+- `Com_Frame`'s frame limiter busy-waits when `com_maxfps` is below the
+  display refresh rate; on web it should yield instead.
+- Asset import UI (OPFS) and persistent `fs_homepath` (IDBFS) aren't done
+  yet; the default Emscripten HTML page is a placeholder.
+- No ASYNCIFY yet, so the loading screen won't update while a map loads.
+
 ## 1. Audit summary
 
 | Area | Current state | Web impact | Effort |
@@ -147,24 +213,24 @@ textures depending on `WEBGL_compressed_texture_*` availability.
 
 ## 4. Work plan
 
-### Phase 0 — Toolchain (≈1 week)
-- [ ] `cmake/Toolchains/emscripten.cmake` (or document `emcmake`);
+### Phase 0 — Toolchain (≈1 week) — done
+- [x] Build with `emcmake` (no separate toolchain file needed);
       `Architecture = wasm32`.
-- [ ] `__EMSCRIPTEN__` block in `shared/qcommon/q_platform.h`.
-- [ ] `BuildForWeb` option: forces internal zlib/png/jpeg (or
-      `-sUSE_ZLIB/-sUSE_LIBPNG/-sUSE_LIBJPEG`), `-sUSE_SDL=2`, turns off
-      dedicated, rend2, MP, tests, JK2.
-- [ ] Get `openjk_sp` engine objects compiling under emcc (expect
-      `sys_unix.cpp` tweaks: `Sys_Dialog`, crash handlers, `execinfo`,
-      CPU detection, `dlopen` paths).
-- [ ] CI job using `mymindstorm/setup-emsdk`.
+- [x] `__EMSCRIPTEN__` block in `shared/qcommon/q_platform.h`.
+- [x] Building with Emscripten forces internal zlib/png/jpeg and
+      `-sUSE_SDL=2`, and turns off dedicated, rend2, MP, tests and JK2
+      (no separate `BuildForWeb` option needed).
+- [x] `openjk_sp`, `jagame` and `rdsp-vanilla` compile under emcc.
+      `sys_unix.cpp` needed no changes.
+- [x] CI job using `mymindstorm/setup-emsdk`.
 
 ### Phase 1 — SP boots to the menu (≈2–3 weeks)
-- [ ] Static module registry for `rdsp-vanilla` and `jagame`; resolve
+- [x] Static module registry for `rdsp-vanilla` and `jagame`; resolve
       duplicate symbols.
-- [ ] Main loop via `emscripten_set_main_loop`, ASYNCIFY on.
-- [ ] `-fwasm-exceptions` for `Com_Error`.
-- [ ] `LEGACY_GL_EMULATION` + WebGL2 context; stub missing GL1 bits.
+- [x] Main loop via `emscripten_set_main_loop`. ASYNCIFY isn't on yet.
+- [x] `-fwasm-exceptions` for `Com_Error`.
+- [x] `LEGACY_GL_EMULATION` (WebGL 1 for now); stub missing GL1 bits;
+      texture names and formats fixed for WebGL.
 - [ ] Asset loader page (OPFS), IDBFS home path.
 - [ ] Milestone check: main menu renders, console works, sound plays.
 
