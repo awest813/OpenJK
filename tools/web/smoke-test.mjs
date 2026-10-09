@@ -150,6 +150,7 @@ async function runClient(browser, page, { args = '', expect = [], addData = true
 		await page.setInputFiles('#add-files', { name: 'zz-smoke.pk3', mimeType: 'application/octet-stream', buffer: testData });
 	}
 	await page.waitForSelector('#play:not([disabled])', { timeout: 120000 });
+	await page.evaluate(() => { document.getElementById('advanced').open = true; });
 	await page.fill('#args', args);
 	await page.click('#play');
 

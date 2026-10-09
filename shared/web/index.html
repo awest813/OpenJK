@@ -3,34 +3,82 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
 <title>OpenJK</title>
 <style>
-	:root { --bg: #0d0f12; --panel: #171a20; --line: #2a2f38; --text: #e6e8eb; --muted: #9aa1ab; --accent: #4f9cf0; }
+	:root { color-scheme: dark; --bg: #0b0d10; --panel: #15181d; --panel-2: #1c2027; --line: #2a2f38; --text: #e7e9ec;
+		--muted: #9aa2ad; --accent: #4f9cf0; --ok: #58c08a; --radius: 10px; }
 	* { box-sizing: border-box; }
-	html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-	main { max-width: 720px; margin: 0 auto; padding: 32px 16px 48px; }
-	h1 { font-size: 28px; margin: 0 0 4px; }
+	html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+	:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+	main { max-width: 720px; margin: 0 auto; padding: 24px 16px 64px; }
+	h1 { font-size: 26px; margin: 0; letter-spacing: -0.01em; }
 	p { margin: 0 0 12px; }
+	.lead { color: var(--muted); margin: 6px 0 20px; }
 	.muted { color: var(--muted); }
+	.small { font-size: 13px; }
+	.cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 	a.card { display: block; color: inherit; text-decoration: none; background: var(--panel); border: 1px solid var(--line);
-		border-radius: 8px; padding: 16px; margin: 16px 0; }
+		border-radius: var(--radius); padding: 18px; transition: border-color .15s; }
 	a.card:hover { border-color: var(--accent); }
 	a.card strong { display: block; font-size: 17px; margin-bottom: 4px; }
+	a.card .go { display: block; margin-top: 12px; color: var(--accent); font-weight: 600; }
+	#data { display: flex; gap: 8px; align-items: flex-start; margin: 20px 0 0; font-size: 14px; }
+	#data::before { content: ""; flex: none; width: 8px; height: 8px; margin-top: 7px; border-radius: 50%; background: var(--muted); }
+	#data.ok::before { background: var(--ok); }
+	.footer { margin-top: 28px; }
+	@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
 <main>
 	<h1>OpenJK</h1>
-	<p class="muted">Star Wars Jedi Knight: Jedi Academy in your browser. You need the game data from your own copy of the game.</p>
-	<a class="card" href="openjk_sp.wasm32.html">
-		<strong>Single player</strong>
-		<span class="muted">The Jedi Academy campaign.</span>
-	</a>
-	<a class="card" href="openjk.wasm32.html">
-		<strong>Multiplayer</strong>
-		<span class="muted">Play against bots, or join servers through this site's network relay.</span>
-	</a>
-	<p class="muted">Both share the game data you add, which stays in this browser.</p>
+	<p class="lead">Star Wars Jedi Knight: Jedi Academy, running in your browser with your own copy of the game.</p>
+	<div class="cards">
+		<a class="card" href="openjk_sp.wasm32.html">
+			<strong>Single player</strong>
+			<span class="muted">The Jedi Academy campaign.</span>
+			<span class="go">Open →</span>
+		</a>
+		<a class="card" href="openjk.wasm32.html">
+			<strong>Multiplayer</strong>
+			<span class="muted">Play against bots, or join servers through this site's network relay.</span>
+			<span class="go">Open →</span>
+		</a>
+	</div>
+	<p id="data">You'll add the game data from your copy of Jedi Academy on the next page. Both modes share it.</p>
+	<p class="footer muted small">OpenJK is open source and not affiliated with Raven Software, Activision or Lucasfilm.
+		Game data stays in this browser and is never uploaded.</p>
 </main>
+<script>
+'use strict';
+// Show whether game data is already stored (the launcher keeps it in OPFS)
+(async () => {
+	try {
+		const root = await navigator.storage.getDirectory();
+		const dir = await root.getDirectoryHandle('openjk-gamedata');
+		let count = 0;
+		let size = 0;
+		const walk = async (handle) => {
+			for await (const [, child] of handle.entries()) {
+				if (child.kind === 'directory') {
+					await walk(child);
+				} else {
+					count++;
+					size += (await child.getFile()).size;
+				}
+			}
+		};
+		await walk(dir);
+		if (count) {
+			const data = document.getElementById('data');
+			data.className = 'ok';
+			data.textContent = `Your game data is ready: ${count} file${count === 1 ? '' : 's'}, ${(size / (1 << 30)).toFixed(2)} GB stored in this browser.`;
+		}
+	} catch (e) {
+		// nothing stored yet, or no OPFS
+	}
+})();
+</script>
 </body>
 </html>
