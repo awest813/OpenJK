@@ -79,16 +79,8 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 	endif()
 
 	if(EMSCRIPTEN)
-		# SDL2 is provided by -sUSE_SDL=2. rd-vanilla is a fixed-function
-		# OpenGL renderer, which only runs on WebGL via Emscripten's emulation.
-		set(SPEngineLibraries ${SPEngineLibraries}
-			"-sLEGACY_GL_EMULATION=1"
-			"-sGL_UNSAFE_OPTS=0"
-			"-sALLOW_MEMORY_GROWTH=1"
-			# lets the hosting page put game data into the virtual filesystem
-			"-sFORCE_FILESYSTEM=1"
-			"-sEXPORTED_RUNTIME_METHODS=FS"
-			)
+		# SDL2 is provided by -sUSE_SDL=2
+		set(SPEngineLibraries ${SPEngineLibraries} ${OpenJKWebEngineLinkOptions})
 	elseif(UseInternalSDL2)
 		if(CMAKE_SIZEOF_VOID_P EQUAL 4)
 			set(SPEngineLibraries

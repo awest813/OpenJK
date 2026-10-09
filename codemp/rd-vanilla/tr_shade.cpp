@@ -177,11 +177,16 @@ static void R_DrawElements( int numIndexes, const glIndex_t *indexes ) {
 
 	// default is to use triangles if compiled vertex arrays are present
 	if ( primitives == 0 ) {
+#ifdef __EMSCRIPTEN__
+		// WebGL has neither compiled vertex arrays nor glArrayElement
+		primitives = 2;
+#else
 		if ( qglLockArraysEXT ) {
 			primitives = 2;
 		} else {
 			primitives = 1;
 		}
+#endif
 	}
 
 

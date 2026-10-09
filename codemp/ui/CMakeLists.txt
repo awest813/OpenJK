@@ -93,14 +93,16 @@ set(MPUIRendererFiles
 source_group("rd-common" FILES ${MPUIRendererFiles})
 set(MPUIFiles ${MPUIFiles} ${MPUIRendererFiles})
 
-add_library(${MPUI} SHARED ${MPUIFiles})
+add_library(${MPUI} ${OpenJKModuleLibraryType} ${MPUIFiles})
 
 if(NOT MSVC)
 	# remove "lib" prefix for .so/.dylib files
 	set_target_properties(${MPUI} PROPERTIES PREFIX "")
 endif()
 
-if(MakeApplicationBundles AND BuildMPEngine)
+if(EMSCRIPTEN)
+	# linked into the engine
+elseif(MakeApplicationBundles AND BuildMPEngine)
 	install(TARGETS ${MPUI}
 		LIBRARY
 		DESTINATION "${JKAInstallDir}/${MPEngine}.app/Contents/MacOS/OpenJK"
@@ -132,6 +134,9 @@ else()
 endif()
 
 set_target_properties(${MPUI} PROPERTIES COMPILE_DEFINITIONS "${MPUIDefines}")
+if(OpenJKStaticModules)
+	openjk_static_module(${MPUI} ui_)
+endif()
 
 # Hide symbols not explicitly marked public.
 set_property(TARGET ${MPUI} APPEND PROPERTY COMPILE_OPTIONS ${OPENJK_VISIBILITY_FLAGS})

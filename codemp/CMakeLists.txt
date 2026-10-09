@@ -357,7 +357,7 @@ if(BuildMPEngine)
 
 	#    Dependencies
 
-	if (NOT WIN32)
+	if (NOT WIN32 AND NOT EMSCRIPTEN)
 		# OpenGL
 		find_package(OpenGL REQUIRED)
 		set(MPEngineIncludeDirectories ${MPEngineIncludeDirectories} ${OPENGL_INCLUDE_DIR})
@@ -381,7 +381,10 @@ if(BuildMPEngine)
 		endif(UseInternalOpenAL)
 	endif()
 
-	if(UseInternalSDL2)
+	if(EMSCRIPTEN)
+		# SDL2 is provided by -sUSE_SDL=2
+		set(MPEngineLibraries ${MPEngineLibraries} ${OpenJKWebEngineLinkOptions})
+	elseif(UseInternalSDL2)
 		if(CMAKE_SIZEOF_VOID_P EQUAL 4)
 			set(MPEngineLibraries
 				${MPEngineLibraries}
@@ -544,6 +547,14 @@ if(BuildMPEngine)
 			"${SharedDir}/sys/sys_win32.cpp"
 			"${SharedDir}/sys/con_passive.cpp"
 			)
+	elseif(EMSCRIPTEN)
+		# no terminal in a browser; modules are linked in
+		set(MPEngineSysFiles
+			${MPEngineSysFiles}
+			"${SharedDir}/sys/sys_unix.cpp"
+			"${SharedDir}/sys/con_passive.cpp"
+			"${SharedDir}/sys/sys_static_modules.cpp"
+			)
 	else(WIN32)
 		set(MPEngineSysFiles
 			${MPEngineSysFiles}
@@ -618,6 +629,14 @@ if(BuildMPEngine)
 	set_target_properties(${MPEngine} PROPERTIES INCLUDE_DIRECTORIES "${MPEngineIncludeDirectories}")
 	set_target_properties(${MPEngine} PROPERTIES PROJECT_LABEL "MP Client")
 	target_link_libraries(${MPEngine} ${MPEngineLibraries})
+
+	if(EMSCRIPTEN)
+		# emit an HTML page to host the engine next to the .js/.wasm
+		set_target_properties(${MPEngine} PROPERTIES SUFFIX ".html")
+	endif()
+	if(OpenJKStaticModules)
+		openjk_link_static_modules(${MPEngine} ${MPVanillaRenderer} ${MPGame} ${MPCGame} ${MPUI})
+	endif()
 endif(BuildMPEngine)
 
 #        Dedicated Server (Engine) (jampded.exe)

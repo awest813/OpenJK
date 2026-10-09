@@ -446,3 +446,34 @@ extern PFNGLISPROGRAMARBPROC qglIsProgramARB;
 
 extern PFNGLLOCKARRAYSEXTPROC qglLockArraysEXT;
 extern PFNGLUNLOCKARRAYSEXTPROC qglUnlockArraysEXT;
+
+#ifdef __EMSCRIPTEN__
+// Emscripten's fixed-function GL emulation doesn't implement these. They are
+// only reached through NV_register_combiners, display list surfaces,
+// r_primitives 1 and shader gamma correction, none of which are used on WebGL.
+#undef qglArrayElement
+#undef qglCallList
+#undef qglDeleteLists
+#undef qglEndList
+#undef qglGenLists
+#undef qglNewList
+#undef qglPopAttrib
+#undef qglPushAttrib
+static inline void APIENTRY qglArrayElement( GLint i ) {}
+static inline void qglCallList( GLuint list ) {}
+static inline void qglDeleteLists( GLuint list, GLsizei range ) {}
+static inline void qglEndList( void ) {}
+static inline GLuint qglGenLists( GLsizei range ) { return 0; }
+static inline void qglNewList( GLuint list, GLenum mode ) {}
+static inline void qglPopAttrib( void ) {}
+static inline void qglPushAttrib( GLbitfield mask ) {}
+
+// WebGL 1 has neither sized internal formats (GL_RGB8, GL_RGBA4, ...) nor
+// compression on upload: the internal format has to match the pixel data.
+#undef qglTexImage2D
+static inline void qglTexImage2D( GLenum target, GLint level, GLint internalformat, GLsizei width,
+	GLsizei height, GLint border, GLenum format, GLenum type, const GLvoid *pixels )
+{
+	glTexImage2D( target, level, format, width, height, border, format, type, pixels );
+}
+#endif

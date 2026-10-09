@@ -662,7 +662,7 @@ char *C_MP3Stream_DecodeInit( LP_MP3STREAM pSFX_MP3Stream, void *pvSourceData, i
 
 // return value is decoded bytes for this packet, which is effectively a BOOL, NZ for not finished decoding yet...
 //
-unsigned int C_MP3Stream_Decode( LP_MP3STREAM pSFX_MP3Stream )
+unsigned int C_MP3Stream_Decode( LP_MP3STREAM pSFX_MP3Stream, int bFastForwarding )
 {
 	unsigned int uiDecoded = 0;	// default to "finished"
 	IN_OUT	 x;

@@ -127,19 +127,23 @@ list(APPEND MPVanillaRendererLibraries          ${ZLIB_LIBRARIES})
 list(APPEND MPVanillaRendererIncludeDirectories ${MINIZIP_INCLUDE_DIRS})
 list(APPEND MPVanillaRendererLibraries          ${MINIZIP_LIBRARIES})
 
-find_package(OpenGL REQUIRED)
-set(MPVanillaRendererIncludeDirectories ${MPVanillaRendererIncludeDirectories} ${OPENGL_INCLUDE_DIR})
-set(MPVanillaRendererLibraries ${MPVanillaRendererLibraries} ${OPENGL_LIBRARIES})
+if(NOT EMSCRIPTEN)
+	find_package(OpenGL REQUIRED)
+	set(MPVanillaRendererIncludeDirectories ${MPVanillaRendererIncludeDirectories} ${OPENGL_INCLUDE_DIR})
+	set(MPVanillaRendererLibraries ${MPVanillaRendererLibraries} ${OPENGL_LIBRARIES})
+endif()
 
 set(MPVanillaRendererIncludeDirectories ${MPVanillaRendererIncludeDirectories} ${OpenJKLibDir})
-add_library(${MPVanillaRenderer} SHARED ${MPVanillaRendererFiles})
+add_library(${MPVanillaRenderer} ${OpenJKModuleLibraryType} ${MPVanillaRendererFiles})
 
 if(NOT MSVC)
 	# remove "lib" prefix for .so/.dylib files
 	set_target_properties(${MPVanillaRenderer} PROPERTIES PREFIX "")
 endif()
 
-if(WIN32)
+if(EMSCRIPTEN)
+	# linked into the engine
+elseif(WIN32)
 	install(TARGETS ${MPVanillaRenderer}
 		RUNTIME
 		DESTINATION ${JKAInstallDir}
@@ -159,6 +163,9 @@ else(WIN32)
 endif()
 
 set_target_properties(${MPVanillaRenderer} PROPERTIES COMPILE_DEFINITIONS "${SharedDefines}")
+if(OpenJKStaticModules)
+	openjk_static_module(${MPVanillaRenderer} renderer_)
+endif()
 
 # Hide symbols not explicitly marked public.
 set_property(TARGET ${MPVanillaRenderer} APPEND PROPERTY COMPILE_OPTIONS ${OPENJK_VISIBILITY_FLAGS})

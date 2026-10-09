@@ -208,14 +208,16 @@ set(MPGameUiFiles
 source_group("ui" FILES ${MPGameUiFiles})
 set(MPGameFiles ${MPGameFiles} ${MPGameUiFiles})
 
-add_library(${MPGame} SHARED ${MPGameFiles})
+add_library(${MPGame} ${OpenJKModuleLibraryType} ${MPGameFiles})
 
 if(NOT MSVC)
 	# remove "lib" prefix for .so/.dylib files
 	set_target_properties(${MPGame} PROPERTIES PREFIX "")
 endif()
 
-if(MakeApplicationBundles AND BuildMPEngine)
+if(EMSCRIPTEN)
+	# linked into the engine
+elseif(MakeApplicationBundles AND BuildMPEngine)
 	install(TARGETS ${MPGame}
 		LIBRARY
 		DESTINATION "${JKAInstallDir}/${MPEngine}.app/Contents/MacOS/OpenJK"
@@ -247,6 +249,9 @@ else()
 endif()
 
 set_target_properties(${MPGame} PROPERTIES COMPILE_DEFINITIONS "${MPGameDefines}")
+if(OpenJKStaticModules)
+	openjk_static_module(${MPGame} game_)
+endif()
 
 # Hide symbols not explicitly marked public.
 set_property(TARGET ${MPGame} APPEND PROPERTY COMPILE_OPTIONS ${OPENJK_VISIBILITY_FLAGS})

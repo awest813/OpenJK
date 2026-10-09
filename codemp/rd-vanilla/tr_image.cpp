@@ -527,6 +527,19 @@ AllocatedImages_t AllocatedImages;
 AllocatedImages_t::iterator itAllocatedImages;
 int giTextureBindNum = 1024;	// will be set to this anyway at runtime, but wtf?
 
+static GLuint R_NewTextureNum( void )
+{
+#ifdef __EMSCRIPTEN__
+	// WebGL only binds texture names that came from glGenTextures
+	GLuint texnum;
+	qglGenTextures( 1, &texnum );
+	giTextureBindNum++;
+	return texnum;
+#else
+	return 1024 + giTextureBindNum++;	// ++ is of course staggeringly important...
+#endif
+}
+
 
 // return = number of images in the list, for those interested
 //
@@ -1011,7 +1024,7 @@ image_t *R_CreateImage( const char *name, const byte *pic, int width, int height
 	image = (image_t*) Z_Malloc( sizeof( image_t ), TAG_IMAGE_T, qtrue );
 //	memset(image,0,sizeof(*image));	// qtrue above does this
 
-	image->texnum = 1024 + giTextureBindNum++;	// ++ is of course staggeringly important...
+	image->texnum = R_NewTextureNum();
 
 	// record which map it was used on...
 	//
@@ -1319,48 +1332,58 @@ void R_CreateBuiltinImages( void ) {
 
 	tr.screenImage = R_CreateImage("*screen", (byte *)data, 8, 8, GL_RGBA, qfalse, qfalse, qfalse, GL_REPEAT );
 
-	// Create the scene glow image. - AReis
-	tr.screenGlow = 1024 + giTextureBindNum++;
-	qglDisable( GL_TEXTURE_2D );
-	qglEnable( GL_TEXTURE_RECTANGLE_ARB );
-	qglBindTexture( GL_TEXTURE_RECTANGLE_ARB, tr.screenGlow );
-	qglTexImage2D( GL_TEXTURE_RECTANGLE_ARB, 0, GL_RGBA16, glConfig.vidWidth, glConfig.vidHeight, 0, GL_RGB, GL_FLOAT, 0 );
-	qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
-	qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-	qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_WRAP_S, GL_CLAMP );
-	qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_WRAP_T, GL_CLAMP );
-
-	// Create the scene image. - AReis
-	tr.sceneImage = 1024 + giTextureBindNum++;
-	qglBindTexture( GL_TEXTURE_RECTANGLE_ARB, tr.sceneImage );
-	qglTexImage2D( GL_TEXTURE_RECTANGLE_ARB, 0, GL_RGBA16, glConfig.vidWidth, glConfig.vidHeight, 0, GL_RGB, GL_FLOAT, 0 );
-	qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
-	qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-	qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_WRAP_S, GL_CLAMP );
-	qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_WRAP_T, GL_CLAMP );
-
-	// Create the minimized scene blur image.
-	if ( r_DynamicGlowWidth->integer > glConfig.vidWidth  )
+	// The dynamic glow textures need texture rectangles, which aren't
+	// available everywhere (e.g. WebGL).
+	extern bool g_bDynamicGlowSupported;
+	if ( !g_bDynamicGlowSupported )
 	{
-		r_DynamicGlowWidth->integer = glConfig.vidWidth;
+		tr.screenGlow = tr.sceneImage = tr.blurImage = 0;
 	}
-	if ( r_DynamicGlowHeight->integer > glConfig.vidHeight  )
+	else
 	{
-		r_DynamicGlowHeight->integer = glConfig.vidHeight;
+		// Create the scene glow image. - AReis
+		tr.screenGlow = R_NewTextureNum();
+		qglDisable( GL_TEXTURE_2D );
+		qglEnable( GL_TEXTURE_RECTANGLE_ARB );
+		qglBindTexture( GL_TEXTURE_RECTANGLE_ARB, tr.screenGlow );
+		qglTexImage2D( GL_TEXTURE_RECTANGLE_ARB, 0, GL_RGBA16, glConfig.vidWidth, glConfig.vidHeight, 0, GL_RGB, GL_FLOAT, 0 );
+		qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+		qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+		qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_WRAP_S, GL_CLAMP );
+		qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_WRAP_T, GL_CLAMP );
+
+		// Create the scene image. - AReis
+		tr.sceneImage = R_NewTextureNum();
+		qglBindTexture( GL_TEXTURE_RECTANGLE_ARB, tr.sceneImage );
+		qglTexImage2D( GL_TEXTURE_RECTANGLE_ARB, 0, GL_RGBA16, glConfig.vidWidth, glConfig.vidHeight, 0, GL_RGB, GL_FLOAT, 0 );
+		qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+		qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+		qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_WRAP_S, GL_CLAMP );
+		qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_WRAP_T, GL_CLAMP );
+
+		// Create the minimized scene blur image.
+		if ( r_DynamicGlowWidth->integer > glConfig.vidWidth  )
+		{
+			r_DynamicGlowWidth->integer = glConfig.vidWidth;
+		}
+		if ( r_DynamicGlowHeight->integer > glConfig.vidHeight  )
+		{
+			r_DynamicGlowHeight->integer = glConfig.vidHeight;
+		}
+		tr.blurImage = R_NewTextureNum();
+		qglBindTexture( GL_TEXTURE_RECTANGLE_ARB, tr.blurImage );
+		qglTexImage2D( GL_TEXTURE_RECTANGLE_ARB, 0, GL_RGBA16, r_DynamicGlowWidth->integer, r_DynamicGlowHeight->integer, 0, GL_RGB, GL_FLOAT, 0 );
+		qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+		qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+		qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_WRAP_S, GL_CLAMP );
+		qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_WRAP_T, GL_CLAMP );
+		qglDisable( GL_TEXTURE_RECTANGLE_ARB );
 	}
-	tr.blurImage = 1024 + giTextureBindNum++;
-	qglBindTexture( GL_TEXTURE_RECTANGLE_ARB, tr.blurImage );
-	qglTexImage2D( GL_TEXTURE_RECTANGLE_ARB, 0, GL_RGBA16, r_DynamicGlowWidth->integer, r_DynamicGlowHeight->integer, 0, GL_RGB, GL_FLOAT, 0 );
-	qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
-	qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-	qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_WRAP_S, GL_CLAMP );
-	qglTexParameteri( GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_WRAP_T, GL_CLAMP );
-	qglDisable( GL_TEXTURE_RECTANGLE_ARB );
 
 	if ( glConfigExt.doGammaCorrectionWithShaders )
 	{
 		qglEnable( GL_TEXTURE_3D );
-		tr.gammaCorrectLUTImage = 1024 + giTextureBindNum++;
+		tr.gammaCorrectLUTImage = R_NewTextureNum();
 		qglBindTexture(GL_TEXTURE_3D, tr.gammaCorrectLUTImage);
 		qglTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA8, 64, 64, 64, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 		qglTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);

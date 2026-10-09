@@ -140,14 +140,16 @@ set(MPCGameGFiles
 source_group("ghoul2" FILES ${MPCGameG2Files})
 set(MPCGameFiles ${MPCGameFiles} ${MPCGameG2Files})
 
-add_library(${MPCGame} SHARED ${MPCGameFiles})
+add_library(${MPCGame} ${OpenJKModuleLibraryType} ${MPCGameFiles})
 
 if(NOT MSVC)
 	# remove "lib" prefix for .so/.dylib files
 	set_target_properties(${MPCGame} PROPERTIES PREFIX "")
 endif()
 
-if(MakeApplicationBundles AND BuildMPEngine)
+if(EMSCRIPTEN)
+	# linked into the engine
+elseif(MakeApplicationBundles AND BuildMPEngine)
 	install(TARGETS ${MPCGame}
 		LIBRARY
 		DESTINATION "${JKAInstallDir}/${MPEngine}.app/Contents/MacOS/OpenJK"
@@ -179,6 +181,9 @@ else()
 endif()
 
 set_target_properties(${MPCGame} PROPERTIES COMPILE_DEFINITIONS "${MPCGameDefines}")
+if(OpenJKStaticModules)
+	openjk_static_module(${MPCGame} cgame_)
+endif()
 
 # Hide symbols not explicitly marked public.
 set_property(TARGET ${MPCGame} APPEND PROPERTY COMPILE_OPTIONS ${OPENJK_VISIBILITY_FLAGS})

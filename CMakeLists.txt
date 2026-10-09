@@ -89,13 +89,12 @@ option(UseInternalPNG    "If set, use bundled libpng."  ${UseInternalPNGDefault}
 option(UseInternalJPEG   "If set, use bundled libjpeg." ${UseInternalJPEGDefault})
 option(UseInternalSDL2   "If set, use bundled SDL2."    ${UseInternalSDL2Default})
 
-# Web (Emscripten) builds: only the SP client is supported so far, everything
-# is statically linked into a single wasm module, and SDL2 comes from the
-# Emscripten port. See docs/web-port-plan.md.
+# Web (Emscripten) builds: the SP and MP clients with the vanilla renderers.
+# Each client is statically linked into a single wasm module, and SDL2 comes
+# from the Emscripten port. See docs/web-port-plan.md.
 if(EMSCRIPTEN)
   foreach(WebUnsupported
-      BuildMPEngine BuildMPRdVanilla BuildMPDed BuildMPGame BuildMPCGame
-      BuildMPUI BuildMPRend2 BuildJK2SPEngine BuildJK2SPGame
+      BuildMPDed BuildMPRend2 BuildJK2SPEngine BuildJK2SPGame
       BuildJK2SPRdVanilla BuildTests BuildSymbolServer)
     set(${WebUnsupported} OFF CACHE BOOL "" FORCE)
   endforeach()
@@ -353,6 +352,18 @@ if(EMSCRIPTEN)
 	set(OpenJKStaticModules ON)
 	set(OpenJKModuleLibraryType STATIC)
 	find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+	# Link options for the SP and MP clients. The vanilla renderers are
+	# fixed-function OpenGL, which only runs on WebGL through Emscripten's
+	# emulation.
+	set(OpenJKWebEngineLinkOptions
+		"-sLEGACY_GL_EMULATION=1"
+		"-sGL_UNSAFE_OPTS=0"
+		"-sALLOW_MEMORY_GROWTH=1"
+		# lets the hosting page put game data into the virtual filesystem
+		"-sFORCE_FILESYSTEM=1"
+		"-sEXPORTED_RUNTIME_METHODS=FS"
+		)
 	set(SharedDefines ${SharedDefines} "OPENJK_STATIC_MODULES")
 else()
 	set(OpenJKStaticModules OFF)
