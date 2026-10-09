@@ -559,6 +559,7 @@ if(BuildMPEngine)
 			"${SharedDir}/sys/sys_unix.cpp"
 			"${SharedDir}/sys/con_passive.cpp"
 			"${SharedDir}/sys/sys_static_modules.cpp"
+			"${SharedDir}/sys/sys_web.cpp"
 			)
 	else(WIN32)
 		set(MPEngineSysFiles
@@ -644,6 +645,9 @@ if(BuildMPEngine)
 	if(OpenJKStaticModules)
 		openjk_link_static_modules(${MPEngine} ${MPVanillaRenderer} ${MPGame} ${MPCGame} ${MPUI})
 	endif()
+	if(EMSCRIPTEN)
+		openjk_add_jspi_variant(${MPEngine})
+	endif()
 
 	if(EMSCRIPTEN AND BuildMPRend2)
 		# Experimental: the same MP client with rend2 on WebGL 2. It can't share
@@ -659,6 +663,7 @@ if(BuildMPEngine)
 		set_property(TARGET ${MPEngineRend2} APPEND PROPERTY LINK_DEPENDS "${CMAKE_SOURCE_DIR}/shared/web/shell.html")
 		target_link_libraries(${MPEngineRend2} ${MPEngineLibraries} ${OpenJKWebRend2LinkOptions})
 		openjk_link_static_modules(${MPEngineRend2} ${MPRend2} ${MPGame} ${MPCGame} ${MPUI})
+		openjk_add_jspi_variant(${MPEngineRend2})
 	endif()
 endif(BuildMPEngine)
 

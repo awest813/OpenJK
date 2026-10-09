@@ -154,6 +154,13 @@ time_t Sys_FileTime( const char *path );
 
 qboolean Sys_LowPhysicalMemory();
 
+#ifdef __EMSCRIPTEN__
+// letting the browser show frames, see sys_web.cpp
+qboolean Sys_WebCanWaitForFrame( void );
+void Sys_WebWaitForFrame( void );
+void Sys_WebFramePresented( void );
+#endif
+
 void Sys_SetProcessorAffinity( void );
 
 typedef enum graphicsApi_e

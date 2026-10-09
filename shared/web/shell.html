@@ -3,7 +3,8 @@
 OpenJK web launcher. emcc uses this as the shell page (--shell-file) for the
 web clients and puts the engine's script tag at the SCRIPT marker at the end.
 Note that emcc minifies it: attributes with default values (like
-type="text") disappear, so don't select on them in CSS.
+type="text") disappear, so don't select on them in CSS. The engine's
+script tag sits in a <template> so that the page can pick the JSPI build.
 
 The game data stays in this browser: .pk3 files go into the origin private
 file system (OPFS) and are loaded into the engine's memory file system when
@@ -231,6 +232,8 @@ IndexedDB.
 </div>
 <pre id="log" hidden></pre>
 
+<!-- emcc's engine script tag; loaded by the script below -->
+<template id="engine-script">{{{ SCRIPT }}}</template>
 <script>
 'use strict';
 
@@ -748,8 +751,18 @@ IndexedDB.
 
 	updatePlayButton();
 	store.init().then(refreshList);
+
+	// Every client is also built with JSPI (*.jspi.js), which lets the loading
+	// screen update during map loads; use that build where the browser
+	// supports it (?jspi=0 forces the other one).
+	const engineScript = document.getElementById('engine-script').content.querySelector('script');
+	const script = document.createElement('script');
+	const useJspi = typeof WebAssembly.Suspending === 'function'
+		&& new URLSearchParams(location.search).get('jspi') !== '0';
+	script.src = useJspi ? engineScript.getAttribute('src').replace(/\.js$/, '.jspi.js') : engineScript.getAttribute('src');
+	script.async = true;
+	document.body.append(script);
 })();
 </script>
-{{{ SCRIPT }}}
 </body>
 </html>

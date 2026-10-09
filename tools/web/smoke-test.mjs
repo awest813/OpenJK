@@ -192,12 +192,14 @@ async function main() {
 	try {
 		for (const client of [
 			{ name: 'SP client', file: 'openjk_sp.wasm32.html', config: 'openjk_sp.cfg' },
+			// the build without JSPI, for browsers that don't have it
+			{ name: 'SP client without JSPI', file: 'openjk_sp.wasm32.html?jspi=0', config: 'openjk_sp.cfg' },
 			{ name: 'MP client', file: 'openjk.wasm32.html', config: 'openjk.cfg',
 				args: `+connect 127.0.0.1:${udpPort}`, expect: ['smoke: hello through the relay'] },
 			{ name: 'MP client with rend2', file: 'openjk_rend2.wasm32.html', config: 'openjk.cfg',
 				expect: ['----- finished R_Init -----'], optional: true },
 		]) {
-			if (client.optional && !fs.existsSync(path.join(buildDir, client.file))) {
+			if (client.optional && !fs.existsSync(path.join(buildDir, client.file.split('?')[0]))) {
 				console.log(`SKIP ${client.name} (not built)`);
 				continue;
 			}

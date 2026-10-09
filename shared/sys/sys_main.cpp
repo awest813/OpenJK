@@ -823,6 +823,17 @@ int main ( int argc, char* argv[] )
 #endif
 
 #ifdef __EMSCRIPTEN__
+	if ( Sys_WebCanWaitForFrame() )
+	{
+		// JSPI: wait for the browser's next frame after each one, which lets
+		// loading screens wait for frames too (see sys_web.cpp)
+		while (1)
+		{
+			Sys_Frame();
+			Sys_WebWaitForFrame();
+		}
+	}
+
 	// the browser drives the main game loop (requestAnimationFrame); this
 	// doesn't return
 	emscripten_set_main_loop( Sys_Frame, 0, 1 );

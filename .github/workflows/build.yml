@@ -232,15 +232,9 @@ jobs:
           name: OpenJK-web
           path: |
             build/index.html
-            build/openjk_sp.wasm32.html
-            build/openjk_sp.wasm32.js
-            build/openjk_sp.wasm32.wasm
-            build/openjk.wasm32.html
-            build/openjk.wasm32.js
-            build/openjk.wasm32.wasm
-            build/openjk_rend2.wasm32.html
-            build/openjk_rend2.wasm32.js
-            build/openjk_rend2.wasm32.wasm
+            build/openjk_sp.wasm32.*
+            build/openjk.wasm32.*
+            build/openjk_rend2.wasm32.*
             tools/web/server.js
           if-no-files-found: error
 

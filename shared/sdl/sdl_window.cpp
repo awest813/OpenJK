@@ -148,6 +148,11 @@ void WIN_Present( window_t *window )
 	{
 		SDL_GL_SwapWindow(screen);
 
+#ifdef __EMSCRIPTEN__
+		// show loading screens while a map loads
+		Sys_WebFramePresented();
+#endif
+
 		if ( r_swapInterval->modified )
 		{
 			r_swapInterval->modified = qfalse;

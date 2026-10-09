@@ -363,6 +363,7 @@ if(EMSCRIPTEN)
 		"-lidbfs.js"
 		"-sEXPORTED_RUNTIME_METHODS=FS,IDBFS,addRunDependency,removeRunDependency"
 		"--shell-file" "${CMAKE_SOURCE_DIR}/shared/web/shell.html"
+		"--js-library" "${CMAKE_SOURCE_DIR}/shared/web/library_openjk.js"
 		)
 	configure_file("${CMAKE_SOURCE_DIR}/shared/web/index.html" "${CMAKE_BINARY_DIR}/index.html" COPYONLY)
 
@@ -466,6 +467,43 @@ function(openjk_static_module Target Prefix)
 		VERBATIM)
 	add_custom_target(${Target}-isolated DEPENDS "${ModuleObject}")
 	set_property(GLOBAL PROPERTY OpenJKModuleObject_${Target} "${ModuleObject}")
+endfunction()
+
+# Web: links Engine a second time with JSPI, as Engine.jspi.js, from the same
+# objects. With JSPI the engine can let the browser show frames in the middle
+# of a map load (shared/sys/sys_web.cpp); the launcher page uses this build
+# when the browser supports JSPI. Call it after Engine is fully set up.
+function(openjk_add_jspi_variant Engine)
+	get_target_property(Sources ${Engine} SOURCES)
+	add_library(${Engine}-objects OBJECT ${Sources})
+	foreach(Property COMPILE_DEFINITIONS INCLUDE_DIRECTORIES COMPILE_OPTIONS)
+		get_target_property(Value ${Engine} ${Property})
+		if(Value)
+			set_property(TARGET ${Engine}-objects PROPERTY ${Property} "${Value}")
+		endif()
+	endforeach()
+	get_target_property(Libraries ${Engine} LINK_LIBRARIES)
+	foreach(Library ${Libraries})
+		if(TARGET ${Library})
+			# for its include directories
+			target_link_libraries(${Engine}-objects PRIVATE ${Library})
+		endif()
+	endforeach()
+	set_property(TARGET ${Engine} PROPERTY SOURCES $<TARGET_OBJECTS:${Engine}-objects>)
+
+	add_executable(${Engine}.jspi $<TARGET_OBJECTS:${Engine}-objects>)
+	set_target_properties(${Engine}.jspi PROPERTIES SUFFIX ".js")
+	target_link_libraries(${Engine}.jspi ${Libraries} "-sJSPI")
+	foreach(Property LINK_DEPENDS MANUALLY_ADDED_DEPENDENCIES)
+		get_target_property(Value ${Engine} ${Property})
+		if(Value)
+			if(Property STREQUAL "LINK_DEPENDS")
+				set_property(TARGET ${Engine}.jspi PROPERTY LINK_DEPENDS "${Value}")
+			else()
+				add_dependencies(${Engine}.jspi ${Value})
+			endif()
+		endif()
+	endforeach()
 endfunction()
 
 # Links the isolated objects of the given modules (and their libraries) into Engine.

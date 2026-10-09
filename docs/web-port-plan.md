@@ -56,8 +56,18 @@ IndexedDB.
   modules apart the way shared libraries are.
   `shared/sys/sys_static_modules.cpp` stands in for `dlopen`/`dlsym`
   behind the existing `Sys_LoadLibrary` macros.
-- **Main loop**: `Sys_Frame()` driven by `emscripten_set_main_loop`;
-  `Com_Frame` skips frames that come early instead of busy-waiting.
+- **Main loop**: `Sys_Frame()`, after which the engine waits for the
+  browser's next animation frame; `Com_Frame` skips frames that come
+  early instead of busy-waiting.
+- **Loading screens**: every client is linked twice from the same objects,
+  plainly and with JSPI (`*.jspi.js`). With JSPI the engine can wait for a
+  browser frame in the middle of a map load (`shared/sys/sys_web.cpp`):
+  when a second frame is presented within one main-loop frame (at most
+  every 100 ms), so loading screens update. The launcher uses the JSPI
+  build where the browser has JSPI (`?jspi=0` forces the other one, whose
+  main loop is `emscripten_set_main_loop` and whose loading screen stays
+  still). ASYNCIFY isn't an option: it doesn't work with the wasm
+  exceptions `Com_Error` uses.
 - **Console**: `con_passive.cpp`, never stdin (Emscripten would open
   `window.prompt()` dialogs).
 - **Files**: `shared/web/shell.html` is the launcher and Emscripten shell
@@ -95,7 +105,6 @@ IndexedDB.
 - Nothing has been rendered with real game data yet. Emscripten's GL
   emulation is "limited workarounds", and could still abort on texture
   environment combinations that only real shaders use.
-- No ASYNCIFY, so the loading screen doesn't update while a map loads.
 - Mobile: no touch controls, and the game data needs more memory than most
   phones give a tab.
 - Mods with their own native code can't be loaded; mods that are only
