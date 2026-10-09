@@ -1098,6 +1098,10 @@ void R_AddWeatherSurfaces()
 {
 	assert(tr.weatherSystem);
 
+	// needs geometry shaders, which some platforms (WebGL) don't have
+	if (!tr.weatherShader.program)
+		return;
+
 	if (tr.weatherSystem->activeWeatherTypes == 0 &&
 		r_debugWeather->integer == 0)
 		return;

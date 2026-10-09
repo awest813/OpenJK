@@ -16,7 +16,7 @@ RUN emcmake cmake -S /src -B /build -DCMAKE_BUILD_TYPE=Release && \
 
 FROM node:22-alpine
 
-COPY --from=build /build/index.html /build/openjk_sp.wasm32.* /build/openjk.wasm32.* /srv/openjk/
+COPY --from=build /build/index.html /build/openjk_sp.wasm32.* /build/openjk.wasm32.* /build/openjk_rend2.wasm32.* /srv/openjk/
 COPY tools/web/server.js /opt/openjk/server.js
 
 USER node

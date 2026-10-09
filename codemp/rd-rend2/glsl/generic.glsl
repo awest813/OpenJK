@@ -145,7 +145,7 @@ vec3 DeformPosition(const vec3 pos, const vec3 normal, const vec2 st)
 		{
 			normalScale = vec3(2.0, 2.0, 0.5);
 		}
-		else if ( sqrDistance < u_Disintegration.w + 50 )
+		else if ( sqrDistance < u_Disintegration.w + 50.0 )
 		{
 			normalScale = vec3(1.0, 1.0, 0.0);
 		}

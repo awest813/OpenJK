@@ -120,7 +120,11 @@ static const staticFunction_t uiFunctions[] = {
 };
 
 static const staticModule_t staticModules[] = {
+#ifdef DEFAULT_RENDER_LIBRARY
+	{ DEFAULT_RENDER_LIBRARY "_" ARCH_STRING DLL_EXT, rendererFunctions },
+#else
 	{ "rd-vanilla_" ARCH_STRING DLL_EXT, rendererFunctions },
+#endif
 	{ "jampgame" ARCH_STRING DLL_EXT, gameFunctions },
 	{ "cgame" ARCH_STRING DLL_EXT, cgameFunctions },
 	{ "ui" ARCH_STRING DLL_EXT, uiFunctions },

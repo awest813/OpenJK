@@ -2231,6 +2231,9 @@ typedef struct glstate_s {
 	uint32_t	glStateBits;
 	uint32_t		vertexAttribsState;
 	vertexAttribute_t currentVaoAttribs[ATTR_INDEX_MAX];
+#ifdef __EMSCRIPTEN__
+	int				attribsBaseVertex; // see GL_ApplyBaseVertex
+#endif
 	uint32_t        vertexAttribsNewFrame;
 	uint32_t        vertexAttribsOldFrame;
 	float           vertexAttribsInterpolation;

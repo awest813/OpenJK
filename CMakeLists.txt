@@ -89,12 +89,13 @@ option(UseInternalPNG    "If set, use bundled libpng."  ${UseInternalPNGDefault}
 option(UseInternalJPEG   "If set, use bundled libjpeg." ${UseInternalJPEGDefault})
 option(UseInternalSDL2   "If set, use bundled SDL2."    ${UseInternalSDL2Default})
 
-# Web (Emscripten) builds: the SP and MP clients with the vanilla renderers.
-# Each client is statically linked into a single wasm module, and SDL2 comes
-# from the Emscripten port. See docs/web-port-plan.md.
+# Web (Emscripten) builds: the SP and MP clients with the vanilla renderers,
+# plus an experimental MP client with rend2 (BuildMPRend2). Each client is
+# statically linked into a single wasm module, and SDL2 comes from the
+# Emscripten port. See docs/web-port-plan.md.
 if(EMSCRIPTEN)
   foreach(WebUnsupported
-      BuildMPDed BuildMPRend2 BuildJK2SPEngine BuildJK2SPGame
+      BuildMPDed BuildJK2SPEngine BuildJK2SPGame
       BuildJK2SPRdVanilla BuildTests BuildSymbolServer)
     set(${WebUnsupported} OFF CACHE BOOL "" FORCE)
   endforeach()
@@ -353,12 +354,8 @@ if(EMSCRIPTEN)
 	set(OpenJKModuleLibraryType STATIC)
 	find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-	# Link options for the SP and MP clients. The vanilla renderers are
-	# fixed-function OpenGL, which only runs on WebGL through Emscripten's
-	# emulation.
+	# Link options for the web clients
 	set(OpenJKWebEngineLinkOptions
-		"-sLEGACY_GL_EMULATION=1"
-		"-sGL_UNSAFE_OPTS=0"
 		"-sALLOW_MEMORY_GROWTH=1"
 		# the launcher page (shared/web/shell.html) loads the game data into
 		# the virtual file system and keeps the home directory in IndexedDB
@@ -368,6 +365,19 @@ if(EMSCRIPTEN)
 		"--shell-file" "${CMAKE_SOURCE_DIR}/shared/web/shell.html"
 		)
 	configure_file("${CMAKE_SOURCE_DIR}/shared/web/index.html" "${CMAKE_BINARY_DIR}/index.html" COPYONLY)
+
+	# The vanilla renderers are fixed-function OpenGL, which only runs on WebGL
+	# through Emscripten's emulation; rend2 needs WebGL 2 without it.
+	set(OpenJKWebVanillaLinkOptions
+		"-sLEGACY_GL_EMULATION=1"
+		"-sGL_UNSAFE_OPTS=0"
+		)
+	set(OpenJKWebRend2LinkOptions
+		"-sMIN_WEBGL_VERSION=2"
+		"-sMAX_WEBGL_VERSION=2"
+		# buffer mapping, emulated with a copy that is uploaded when unmapped
+		"-sFULL_ES3=1"
+		)
 	set(SharedDefines ${SharedDefines} "OPENJK_STATIC_MODULES")
 else()
 	set(OpenJKStaticModules OFF)

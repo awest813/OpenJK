@@ -133,9 +133,11 @@ list(APPEND MPRend2Libraries          ${ZLIB_LIBRARIES})
 list(APPEND MPRend2IncludeDirectories ${MINIZIP_INCLUDE_DIRS})
 list(APPEND MPRend2Libraries          ${MINIZIP_LIBRARIES})
 
-find_package(OpenGL REQUIRED)
-set(MPRend2IncludeDirectories ${MPRend2IncludeDirectories} ${OPENGL_INCLUDE_DIR})
-set(MPRend2Libraries ${MPRend2Libraries} ${OPENGL_LIBRARIES})
+if(NOT EMSCRIPTEN)
+	find_package(OpenGL REQUIRED)
+	set(MPRend2IncludeDirectories ${MPRend2IncludeDirectories} ${OPENGL_INCLUDE_DIR})
+	set(MPRend2Libraries ${MPRend2Libraries} ${OPENGL_LIBRARIES})
+endif()
 
 source_group("renderer"
 	FILES
@@ -147,14 +149,16 @@ set(MPRend2Files
 	${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp)
 
 set(MPRend2IncludeDirectories ${MPRend2IncludeDirectories} ${OpenJKLibDir})
-add_library(${MPRend2} SHARED ${MPRend2Files})
+add_library(${MPRend2} ${OpenJKModuleLibraryType} ${MPRend2Files})
 
 if(NOT MSVC)
 	# remove "lib" prefix for .so/.dylib files
 	set_target_properties(${MPRend2} PROPERTIES PREFIX "")
 endif()
 
-if(WIN32)
+if(EMSCRIPTEN)
+	# linked into the engine
+elseif(WIN32)
 	install(TARGETS ${MPRend2}
 		RUNTIME
 		DESTINATION ${JKAInstallDir}
@@ -174,6 +178,9 @@ else(WIN32)
 endif()
 
 set_target_properties(${MPRend2} PROPERTIES COMPILE_DEFINITIONS "${SharedDefines}")
+if(OpenJKStaticModules)
+	openjk_static_module(${MPRend2} renderer_)
+endif()
 
 # Hide symbols not explicitly marked public.
 set_property(TARGET ${MPRend2} APPEND PROPERTY COMPILE_OPTIONS ${OPENJK_VISIBILITY_FLAGS})
@@ -193,7 +200,21 @@ if (NOT WIN32 AND NOT APPLE)
 	target_compile_definitions(compact_glsl PRIVATE "ARCH_STRING=\"${Architecture}\"")
 endif()
 target_include_directories(compact_glsl PRIVATE "${MPRend2IncludeDirectories}")
-if (WIN32 OR APPLE)
+if (EMSCRIPTEN)
+# the build tool is compiled to JavaScript too, and run with Node.js
+target_link_options(compact_glsl PRIVATE "-sNODERAWFS=1" "-sALLOW_MEMORY_GROWTH=1")
+add_custom_command(
+	OUTPUT
+		${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp
+		${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.h
+	COMMAND
+		${CMAKE_CROSSCOMPILING_EMULATOR} $<TARGET_FILE:compact_glsl>
+			${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp
+			${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.h
+			${MPRend2GLSLFiles}
+	DEPENDS
+		compact_glsl ${MPRend2GLSLFiles})
+elseif (WIN32 OR APPLE)
 add_custom_command(
 	OUTPUT
 		${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp

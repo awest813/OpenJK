@@ -58,7 +58,7 @@ vec2 hammersley2D(uint i, uint N) {
 float D_GGX( in float NH, in float a )
 {
 	float a2 = a * a;
-	float d = (NH * a2 - NH) * NH + 1;
+	float d = (NH * a2 - NH) * NH + 1.0;
 	return a2 / (M_PI * d * d);
 }
 

@@ -639,9 +639,26 @@ if(BuildMPEngine)
 		# emit an HTML page to host the engine next to the .js/.wasm
 		set_target_properties(${MPEngine} PROPERTIES SUFFIX ".html")
 		set_property(TARGET ${MPEngine} APPEND PROPERTY LINK_DEPENDS "${CMAKE_SOURCE_DIR}/shared/web/shell.html")
+		target_link_libraries(${MPEngine} ${OpenJKWebVanillaLinkOptions})
 	endif()
 	if(OpenJKStaticModules)
 		openjk_link_static_modules(${MPEngine} ${MPVanillaRenderer} ${MPGame} ${MPCGame} ${MPUI})
+	endif()
+
+	if(EMSCRIPTEN AND BuildMPRend2)
+		# Experimental: the same MP client with rend2 on WebGL 2. It can't share
+		# a binary with rd-vanilla, which needs Emscripten's GL emulation.
+		set(MPEngineRend2 "openjk_rend2.${Architecture}")
+		add_executable(${MPEngineRend2} ${MPEngineFiles})
+		set_target_properties(${MPEngineRend2} PROPERTIES
+			COMPILE_DEFINITIONS "${MPEngineDefines};DEFAULT_RENDER_LIBRARY=\"rd-rend2\""
+			INCLUDE_DIRECTORIES "${MPEngineIncludeDirectories}"
+			PROJECT_LABEL "MP Client (rend2)"
+			SUFFIX ".html")
+		set_property(TARGET ${MPEngineRend2} APPEND PROPERTY COMPILE_OPTIONS ${OPENJK_VISIBILITY_FLAGS})
+		set_property(TARGET ${MPEngineRend2} APPEND PROPERTY LINK_DEPENDS "${CMAKE_SOURCE_DIR}/shared/web/shell.html")
+		target_link_libraries(${MPEngineRend2} ${MPEngineLibraries} ${OpenJKWebRend2LinkOptions})
+		openjk_link_static_modules(${MPEngineRend2} ${MPRend2} ${MPGame} ${MPCGame} ${MPUI})
 	endif()
 endif(BuildMPEngine)
 

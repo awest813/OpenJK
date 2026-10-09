@@ -80,7 +80,7 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 
 	if(EMSCRIPTEN)
 		# SDL2 is provided by -sUSE_SDL=2
-		set(SPEngineLibraries ${SPEngineLibraries} ${OpenJKWebEngineLinkOptions})
+		set(SPEngineLibraries ${SPEngineLibraries} ${OpenJKWebEngineLinkOptions} ${OpenJKWebVanillaLinkOptions})
 	elseif(UseInternalSDL2)
 		if(CMAKE_SIZEOF_VOID_P EQUAL 4)
 			set(SPEngineLibraries

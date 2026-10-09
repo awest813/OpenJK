@@ -30,6 +30,7 @@
 // fake UDP server through the relay in tools/web/server.js.
 
 import { spawn } from 'child_process';
+import fs from 'fs';
 import dgram from 'dgram';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -193,7 +194,13 @@ async function main() {
 			{ name: 'SP client', file: 'openjk_sp.wasm32.html', config: 'openjk_sp.cfg' },
 			{ name: 'MP client', file: 'openjk.wasm32.html', config: 'openjk.cfg',
 				args: `+connect 127.0.0.1:${udpPort}`, expect: ['smoke: hello through the relay'] },
+			{ name: 'MP client with rend2', file: 'openjk_rend2.wasm32.html', config: 'openjk.cfg',
+				expect: ['----- finished R_Init -----'], optional: true },
 		]) {
+			if (client.optional && !fs.existsSync(path.join(buildDir, client.file))) {
+				console.log(`SKIP ${client.name} (not built)`);
+				continue;
+			}
 			// a fresh profile, then a reload in the same profile
 			const context = await browser.newContext();
 			let page = await context.newPage();

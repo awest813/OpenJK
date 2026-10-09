@@ -522,6 +522,16 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 			SDL_GL_SetAttribute( SDL_GL_MULTISAMPLEBUFFERS, samples ? 1 : 0 );
 			SDL_GL_SetAttribute( SDL_GL_MULTISAMPLESAMPLES, samples );
 
+#ifdef __EMSCRIPTEN__
+			if ( windowDesc->gl.majorVersion >= 3 )
+			{
+				// desktop OpenGL 3.x is WebGL 2 (OpenGL ES 3.0) in a browser
+				SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, 3 );
+				SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, 0 );
+				SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES );
+			}
+			else
+#endif
 			if ( windowDesc->gl.majorVersion )
 			{
 				int compactVersion = windowDesc->gl.majorVersion * 100 + windowDesc->gl.minorVersion * 10;

@@ -21,6 +21,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 // tr_glsl.c
 #include "tr_local.h"
+
+#include <string>
 #include "tr_allocator.h"
 #include "glsl_shaders.h"
 
@@ -252,7 +254,24 @@ static size_t GLSL_GetShaderHeader(
 
 	dest[0] = '\0';
 
+#ifdef __EMSCRIPTEN__
+	// WebGL 2: GLSL ES 3.00, which needs default precisions
+	Q_strcat(dest, size,
+		"#version 300 es\n"
+		"precision highp float;\n"
+		"precision highp int;\n"
+		"precision highp sampler2D;\n"
+		"precision highp sampler2DShadow;\n"
+		"precision highp sampler2DArray;\n"
+		"precision highp sampler2DArrayShadow;\n"
+		"precision highp sampler3D;\n"
+		"precision highp samplerCube;\n"
+		"precision highp samplerCubeShadow;\n"
+		"precision highp usampler2D;\n"
+		"precision highp isampler2D;\n");
+#else
 	Q_strcat(dest, size, "#version 150 core\n");
+#endif
 
 	Q_strcat(dest, size,
 					"#ifndef M_PI\n"
@@ -404,6 +423,31 @@ static GLuint GLSL_CompileGPUShader(
 	{
 		return 0;
 	}
+
+#ifdef __EMSCRIPTEN__
+	// GLSL ES has no glBindFragDataLocation: give the outputs their
+	// locations in the source instead (see shaderOutputNames)
+	std::string source(buffer, size);
+	if ( shaderType == GL_FRAGMENT_SHADER )
+	{
+		static const struct {
+			const char *declaration;
+			const char *replacement;
+		} outputs[] = {
+			{ "out vec4 out_Color;", "layout(location = 0) out vec4 out_Color;" },
+			{ "out vec4 out_Glow;", "layout(location = 1) out vec4 out_Glow;" },
+		};
+
+		for ( const auto& output : outputs )
+		{
+			const size_t pos = source.find(output.declaration);
+			if ( pos != std::string::npos )
+				source.replace(pos, strlen(output.declaration), output.replacement);
+		}
+	}
+	buffer = source.c_str();
+	size = (int)source.size();
+#endif
 
 	qglShaderSource(shader, 1, &buffer, &size);
 	qglCompileShader(shader);
@@ -1353,8 +1397,14 @@ Block *FindBlock( const char *name, Block *blocks, size_t numBlocks )
 
 void GLSL_InitSplashScreenShader()
 {
+#ifdef __EMSCRIPTEN__
+	// WebGL 2: GLSL ES 3.00
+#define SPLASH_GLSL_VERSION "#version 300 es\nprecision highp float;\n"
+#else
+#define SPLASH_GLSL_VERSION "#version 150 core\n"
+#endif
 	const char *vs =
-		"#version 150 core\n"
+		SPLASH_GLSL_VERSION
 		"out vec2 var_TexCoords;\n"
 		"void main() {\n"
 		"  vec2 position = vec2(2.0 * float(gl_VertexID & 2) - 1.0, 4.0 * float(gl_VertexID & 1) - 1.0);\n"
@@ -1363,7 +1413,7 @@ void GLSL_InitSplashScreenShader()
 		"}";
 
 	const char *fs =
-		"#version 150 core\n"
+		SPLASH_GLSL_VERSION
 		"uniform sampler2D u_SplashTexture;\n"
 		"in vec2 var_TexCoords;\n"
 		"out vec4 out_Color;\n"
@@ -1723,7 +1773,7 @@ static int GLSL_LoadGPUProgramLightAll(
 
 			Q_strcat(
 				extradefines, sizeof(extradefines),
-				va("#define r_shadowMapSize %d\n", r_shadowMapSize->integer));
+				va("#define r_shadowMapSize %d.0\n", r_shadowMapSize->integer));
 			Q_strcat(
 				extradefines, sizeof(extradefines),
 				va("#define r_shadowCascadeZFar %f\n", r_shadowCascadeZFar->value));
@@ -1892,6 +1942,11 @@ static int GLSL_LoadGPUProgramVShadow(
 	ShaderProgramBuilder& builder,
 	Allocator& scratchAlloc)
 {
+#ifdef __EMSCRIPTEN__
+	// WebGL has no geometry shaders
+	return 0;
+#endif
+
 	Allocator allocator(scratchAlloc.Base(), scratchAlloc.GetSize());
 
 	char extradefines[1200];
@@ -2058,6 +2113,11 @@ static int GLSL_LoadGPUProgramPrefilterEnvMap(
 	ShaderProgramBuilder& builder,
 	Allocator& scratchAlloc)
 {
+#ifdef __EMSCRIPTEN__
+	// WebGL has no geometry shaders
+	return 0;
+#endif
+
 	GLSL_LoadGPUProgramBasic(
 		builder,
 		scratchAlloc,
@@ -2252,6 +2312,11 @@ static int GLSL_LoadGPUProgramWeather(
 	ShaderProgramBuilder& builder,
 	Allocator& scratchAlloc )
 {
+#ifdef __EMSCRIPTEN__
+	// WebGL has no geometry shaders
+	return 0;
+#endif
+
 	GLSL_LoadGPUProgramBasic(
 		builder,
 		scratchAlloc,

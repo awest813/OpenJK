@@ -510,7 +510,13 @@ void RE_BeginFrame( stereoFrame_t stereoFrame ) {
 	if ( thisFrame->sync )
 	{
 		GLsync sync = thisFrame->sync;
+#ifdef __EMSCRIPTEN__
+		// WebGL can't block on a fence, and doesn't need to: buffer "mappings"
+		// are copies that are uploaded when unmapped
+		GLenum result = GL_ALREADY_SIGNALED;
+#else
 		GLenum result = qglClientWaitSync( sync, 0, 0 );
+#endif
 		if ( result != GL_ALREADY_SIGNALED )
 		{
 			ri.Printf( PRINT_DEVELOPER, "OpenGL: GPU is more than %d frames behind! Waiting for this frame to finish...\n", MAX_FRAMES );

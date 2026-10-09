@@ -250,6 +250,167 @@ static qboolean GLimp_HaveExtension(const char *ext)
 	return (qboolean)((*ptr == ' ') || (*ptr == '\0'));  // verify it's complete string.
 }
 
+#ifdef __EMSCRIPTEN__
+// WebGL 2 (OpenGL ES 3.0) lacks some of the desktop OpenGL 3.2 functions the
+// renderer loads, or only has them through extensions that may be missing.
+// These stand in for them: with an equivalent where WebGL has one, and doing
+// nothing where the renderer copes without (and the feature is off on web).
+// Base vertex draws are emulated by GL_DrawIndexed (tr_backend.cpp), so the
+// base vertex is ignored here.
+static void APIENTRY Web_BindFragDataLocation( GLuint program, GLuint color, const GLchar *name )
+{
+	// fragment outputs get layout qualifiers instead (GLSL_GetShaderHeader)
+}
+
+static void APIENTRY Web_CompressedTexImage1D( GLenum target, GLint level, GLenum internalformat,
+	GLsizei width, GLint border, GLsizei imageSize, const void *data )
+{
+}
+
+static void APIENTRY Web_CompressedTexSubImage1D( GLenum target, GLint level, GLint xoffset,
+	GLsizei width, GLenum format, GLsizei imageSize, const void *data )
+{
+}
+
+static void APIENTRY Web_DrawElementsBaseVertex( GLenum mode, GLsizei count, GLenum type,
+	const void *indices, GLint basevertex )
+{
+	qglDrawElements( mode, count, type, indices );
+}
+
+static void APIENTRY Web_DrawRangeElementsBaseVertex( GLenum mode, GLuint start, GLuint end,
+	GLsizei count, GLenum type, const void *indices, GLint basevertex )
+{
+	qglDrawRangeElements( mode, start, end, count, type, indices );
+}
+
+static void APIENTRY Web_DrawElementsInstancedBaseVertex( GLenum mode, GLsizei count, GLenum type,
+	const void *indices, GLsizei instancecount, GLint basevertex )
+{
+	qglDrawElementsInstanced( mode, count, type, indices, instancecount );
+}
+
+static void APIENTRY Web_MultiDrawArrays( GLenum mode, const GLint *first, const GLsizei *count,
+	GLsizei drawcount )
+{
+	for ( GLsizei i = 0; i < drawcount; i++ )
+		qglDrawArrays( mode, first[i], count[i] );
+}
+
+static void APIENTRY Web_MultiDrawElements( GLenum mode, const GLsizei *count, GLenum type,
+	const void *const *indices, GLsizei drawcount )
+{
+	for ( GLsizei i = 0; i < drawcount; i++ )
+		qglDrawElements( mode, count[i], type, indices[i] );
+}
+
+static void APIENTRY Web_MultiDrawElementsBaseVertex( GLenum mode, const GLsizei *count, GLenum type,
+	const void *const *indices, GLsizei drawcount, const GLint *basevertex )
+{
+	Web_MultiDrawElements( mode, count, type, indices, drawcount );
+}
+
+static void APIENTRY Web_FramebufferTexture( GLenum target, GLenum attachment, GLuint texture, GLint level )
+{
+	// no layered framebuffers; only used to render cube maps, which are off
+	qglFramebufferTexture2D( target, attachment, GL_TEXTURE_CUBE_MAP_POSITIVE_X, texture, level );
+}
+
+static void APIENTRY Web_FramebufferTexture1D( GLenum target, GLenum attachment, GLenum textarget,
+	GLuint texture, GLint level )
+{
+}
+
+static void APIENTRY Web_FramebufferTexture3D( GLenum target, GLenum attachment, GLenum textarget,
+	GLuint texture, GLint level, GLint zoffset )
+{
+	qglFramebufferTextureLayer( target, attachment, texture, level, zoffset );
+}
+
+static void APIENTRY Web_GetActiveUniformName( GLuint program, GLuint uniformIndex, GLsizei bufSize,
+	GLsizei *length, GLchar *uniformName )
+{
+	GLint size;
+	GLenum type;
+	qglGetActiveUniform( program, uniformIndex, bufSize, length, &size, &type, uniformName );
+}
+
+static void APIENTRY Web_GetCompressedTexImage( GLenum target, GLint level, void *img )
+{
+}
+
+static void APIENTRY Web_GetQueryObjectiv( GLuint id, GLenum pname, GLint *params )
+{
+	GLuint value = 0;
+	qglGetQueryObjectuiv( id, pname, &value );
+	*params = (GLint)value;
+}
+
+static void APIENTRY Web_GetVertexAttribdv( GLuint index, GLenum pname, GLdouble *params )
+{
+	*params = 0.0;
+}
+
+static void *APIENTRY Web_MapBuffer( GLenum target, GLenum access )
+{
+	// WebGL can't map buffers for reading (only used for screenshots)
+	return NULL;
+}
+
+static const struct {
+	const char *name;
+	void *function;
+} webFunctions[] = {
+	{ "glBindFragDataLocation", (void *)Web_BindFragDataLocation },
+	{ "glCompressedTexImage1D", (void *)Web_CompressedTexImage1D },
+	{ "glCompressedTexSubImage1D", (void *)Web_CompressedTexSubImage1D },
+	{ "glDrawElementsBaseVertex", (void *)Web_DrawElementsBaseVertex },
+	{ "glDrawRangeElementsBaseVertex", (void *)Web_DrawRangeElementsBaseVertex },
+	{ "glDrawElementsInstancedBaseVertex", (void *)Web_DrawElementsInstancedBaseVertex },
+	{ "glMultiDrawArrays", (void *)Web_MultiDrawArrays },
+	{ "glMultiDrawElements", (void *)Web_MultiDrawElements },
+	{ "glMultiDrawElementsBaseVertex", (void *)Web_MultiDrawElementsBaseVertex },
+	{ "glFramebufferTexture", (void *)Web_FramebufferTexture },
+	{ "glFramebufferTexture1D", (void *)Web_FramebufferTexture1D },
+	{ "glFramebufferTexture3D", (void *)Web_FramebufferTexture3D },
+	{ "glGetActiveUniformName", (void *)Web_GetActiveUniformName },
+	{ "glGetCompressedTexImage", (void *)Web_GetCompressedTexImage },
+	{ "glGetQueryObjectiv", (void *)Web_GetQueryObjectiv },
+	{ "glGetVertexAttribdv", (void *)Web_GetVertexAttribdv },
+	{ "glMapBuffer", (void *)Web_MapBuffer },
+};
+
+static void APIENTRY Web_GetBufferSubData( GLenum target, GLintptr offset, GLsizeiptr size, void *data )
+{
+	// unused by the renderer
+	memset( data, 0, size );
+}
+
+extern "C" void *emscripten_webgl2_get_proc_address( const char *name );
+
+static void *GL_GetWebProcAddress( const char *name )
+{
+	for ( size_t i = 0; i < ARRAY_LEN( webFunctions ); i++ )
+	{
+		if ( !strcmp( name, webFunctions[i].name ) )
+			return webFunctions[i].function;
+	}
+
+	if ( !strcmp( name, "glGetBufferSubData" ) )
+		return (void *)Web_GetBufferSubData;
+
+	// WebGL 2 first: the generic lookup prefers WebGL 1 extensions, and would
+	// give e.g. EXT_disjoint_timer_query's glGenQueriesEXT for glGenQueries
+	void *function = emscripten_webgl2_get_proc_address( name );
+	if ( function )
+		return function;
+
+	return GL_GetProcAddress( name );
+}
+#undef GL_GetProcAddress
+#define GL_GetProcAddress GL_GetWebProcAddress
+#endif
+
 template<typename GLFuncType>
 static qboolean GetGLFunction ( GLFuncType& glFunction, const char *glFunctionString, qboolean errorOnFailure )
 {

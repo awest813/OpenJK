@@ -371,11 +371,73 @@ void GL_State( uint32_t stateBits )
 	glState.glStateBits = stateBits;
 }
 
+#ifdef __EMSCRIPTEN__
+static int GL_VertexAttribSize( const vertexAttribute_t& attrib )
+{
+	switch ( attrib.type )
+	{
+		case GL_INT_2_10_10_10_REV:
+		case GL_UNSIGNED_INT_2_10_10_10_REV:
+			return 4;
+		case GL_BYTE:
+		case GL_UNSIGNED_BYTE:
+			return attrib.numComponents;
+		case GL_SHORT:
+		case GL_UNSIGNED_SHORT:
+		case GL_HALF_FLOAT:
+			return 2 * attrib.numComponents;
+		default:
+			return 4 * attrib.numComponents;
+	}
+}
+
+// WebGL 2 has no base vertex draws (glDrawElements*BaseVertex), so the
+// per-vertex attributes are pointed at the base vertex instead.
+static void GL_ApplyBaseVertex( int baseVertex )
+{
+	if ( glState.attribsBaseVertex == baseVertex )
+	{
+		return;
+	}
+
+	for ( int i = 0; i < ATTR_INDEX_MAX; i++ )
+	{
+		const vertexAttribute_t& attrib = glState.currentVaoAttribs[i];
+		if ( !(glState.vertexAttribsState & (1u << i)) || attrib.stepRate != 0 )
+		{
+			continue;
+		}
+
+		const int stride = attrib.stride ? attrib.stride : GL_VertexAttribSize(attrib);
+		const int offset = attrib.offset + baseVertex * stride;
+
+		R_BindVBO(attrib.vbo);
+		if ( attrib.integerAttribute )
+		{
+			qglVertexAttribIPointer(i, attrib.numComponents, attrib.type,
+				attrib.stride, BUFFER_OFFSET(offset));
+		}
+		else
+		{
+			qglVertexAttribPointer(i, attrib.numComponents, attrib.type,
+				attrib.normalize, attrib.stride, BUFFER_OFFSET(offset));
+		}
+	}
+
+	glState.attribsBaseVertex = baseVertex;
+}
+#endif
+
 void GL_VertexAttribPointers(
 		size_t numAttributes,
 		vertexAttribute_t *attributes )
 {
 	assert(attributes != nullptr || numAttributes == 0);
+
+#ifdef __EMSCRIPTEN__
+	// the attribute state below is for base vertex 0
+	GL_ApplyBaseVertex(0);
+#endif
 
 	uint32_t newAttribs = 0;
 	for ( int i = 0; i < numAttributes; i++ )
@@ -443,6 +505,15 @@ void GL_DrawIndexed(
 		int baseVertex)
 {
 	assert(numInstances > 0);
+#ifdef __EMSCRIPTEN__
+	GL_ApplyBaseVertex(baseVertex);
+	qglDrawElementsInstanced(
+			primitiveType,
+			numIndices,
+			indexType,
+			BUFFER_OFFSET(offset),
+			numInstances);
+#else
 	qglDrawElementsInstancedBaseVertex(
 			primitiveType,
 			numIndices,
@@ -450,6 +521,7 @@ void GL_DrawIndexed(
 			BUFFER_OFFSET(offset),
 			numInstances,
 			baseVertex);
+#endif
 }
 
 void GL_MultiDrawIndexed(
@@ -459,6 +531,9 @@ void GL_MultiDrawIndexed(
 		int numDraws)
 {
 	assert(numDraws > 0);
+#ifdef __EMSCRIPTEN__
+	GL_ApplyBaseVertex(0);
+#endif
 	qglMultiDrawElements(
 			primitiveType,
 			numIndices,
@@ -470,6 +545,9 @@ void GL_MultiDrawIndexed(
 void GL_Draw( GLenum primitiveType, int firstVertex, int numVertices, int numInstances )
 {
 	assert(numInstances > 0);
+#ifdef __EMSCRIPTEN__
+	GL_ApplyBaseVertex(0);
+#endif
 	qglDrawArraysInstanced(primitiveType, firstVertex, numVertices, numInstances);
 }
 
@@ -1927,6 +2005,11 @@ RB_PrefilterEnvMap
 static const void *RB_PrefilterEnvMap(const void *data) {
 
 	const convolveCubemapCommand_t *cmd = (const convolveCubemapCommand_t *)data;
+
+	// needs geometry shaders and layered framebuffers, which some platforms
+	// (WebGL) don't have
+	if (!tr.prefilterEnvMapShader.program)
+		return (const void *)(cmd + 1);
 
 	// finish any 2D drawing if needed
 	if (tess.numIndexes)

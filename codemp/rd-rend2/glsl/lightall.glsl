@@ -713,8 +713,8 @@ vec3 Diff_Burley(float roughness, float NoV, float NoL, float LoH)
 
 vec3 F_Schlick(in vec3 SpecularColor, in float VH)
 {
-	float Fc = pow(1 - VH, 5);
-	return clamp(50.0 * SpecularColor.g, 0.0, 1.0) * Fc + (1 - Fc) * SpecularColor; //hacky way to decide if reflectivity is too low (< 2%)
+	float Fc = pow(1.0 - VH, 5.0);
+	return clamp(50.0 * SpecularColor.g, 0.0, 1.0) * Fc + (1.0 - Fc) * SpecularColor; //hacky way to decide if reflectivity is too low (< 2%)
 }
 
 float D_GGX( in float NH, in float a )
@@ -724,7 +724,7 @@ float D_GGX( in float NH, in float a )
 	return alphaSq / (f * f);*/
 
 	float a2 = a * a;
-	float d = (NH * a2 - NH) * NH + 1;
+	float d = (NH * a2 - NH) * NH + 1.0;
 	return a2 / (M_PI * d * d);
 }
 
@@ -732,8 +732,8 @@ float D_GGX( in float NH, in float a )
 // [Heitz 2014, "Understanding the Masking-Shadowing Function in Microfacet-Based BRDFs"]
 float V_SmithJointApprox(in float a, in float NV, in float NL)
 {
-	float Vis_SmithV = NL * (NV * (1 - a) + a);
-	float Vis_SmithL = NV * (NL * (1 - a) + a);
+	float Vis_SmithV = NL * (NV * (1.0 - a) + a);
+	float Vis_SmithL = NV * (NL * (1.0 - a) + a);
 	return 0.5 * (1.0 / (Vis_SmithV + Vis_SmithL));
 }
 
@@ -885,7 +885,7 @@ float getLightDepth(in vec3 Vec, in float f)
 
 	const float n = 1.0;
 
-	float NormZComp = (f + n) / (f - n) - 2 * f*n / (Z* (f - n));
+	float NormZComp = (f + n) / (f - n) - 2.0 * f*n / (Z* (f - n));
 
 	return ((NormZComp + 1.0) * 0.5);
 }

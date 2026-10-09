@@ -7,6 +7,8 @@
 #	include <gl/gl.h>
 #elif defined(MACOS_X)
 #	include <OpenGL/gl3.h>
+#elif defined( __EMSCRIPTEN__ )
+#	include <GL/gl.h>
 #elif defined( __linux__ )
 #	include <GL/gl.h>
 #	include <GL/glx.h>
@@ -614,3 +616,18 @@ extern PFNGLGETDEBUGMESSAGELOGARBPROC qglGetDebugMessageLogARB;
 extern PFNGLQUERYCOUNTERPROC qglQueryCounter;
 extern PFNGLGETQUERYOBJECTI64VPROC qglGetQueryObjecti64v;
 extern PFNGLGETQUERYOBJECTUI64VPROC qglGetQueryObjectui64v;
+
+#ifdef __EMSCRIPTEN__
+// WebGL 2 only has glDrawBuffers, and no front buffer
+#undef qglDrawBuffer
+static inline void qglDrawBuffer( GLenum mode )
+{
+	if ( mode == GL_FRONT || mode == GL_FRONT_AND_BACK )
+		mode = GL_BACK;
+	qglDrawBuffers( 1, &mode );
+}
+
+// no wireframe rendering in WebGL
+#undef qglPolygonMode
+static inline void qglPolygonMode( GLenum face, GLenum mode ) {}
+#endif

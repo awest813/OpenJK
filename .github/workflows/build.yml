@@ -238,6 +238,9 @@ jobs:
             build/openjk.wasm32.html
             build/openjk.wasm32.js
             build/openjk.wasm32.wasm
+            build/openjk_rend2.wasm32.html
+            build/openjk_rend2.wasm32.js
+            build/openjk_rend2.wasm32.wasm
             tools/web/server.js
           if-no-files-found: error
 

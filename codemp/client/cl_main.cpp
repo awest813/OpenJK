@@ -2412,7 +2412,9 @@ static IHeapAllocator *GetG2VertSpaceServer( void ) {
 	return G2VertSpaceServer;
 }
 
+#ifndef DEFAULT_RENDER_LIBRARY
 #define DEFAULT_RENDER_LIBRARY "rd-vanilla"
+#endif
 
 void CL_InitRef( void ) {
 	static refimport_t ri;

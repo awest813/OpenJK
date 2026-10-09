@@ -1343,6 +1343,11 @@ RB_ShadowTessEnd
 =================
 */
 void RB_ShadowTessEnd(shaderCommands_t *input, const VertexArraysProperties *vertexArrays) {
+	// needs geometry shaders, which some platforms (WebGL) don't have
+	if (!tr.volumeShadowShader.program) {
+		return;
+	}
+
 	if (glConfig.stencilBits < 4) {
 		ri.Printf(PRINT_ALL, "no stencil bits for stencil writing\n");
 		return;

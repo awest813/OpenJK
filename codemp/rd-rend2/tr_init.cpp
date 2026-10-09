@@ -1201,11 +1201,15 @@ void GL_SetDefaultState( void )
 	qglDepthMask( GL_TRUE );
 	qglDisable( GL_DEPTH_TEST );
 	qglEnable( GL_SCISSOR_TEST );
+#ifndef __EMSCRIPTEN__ // always on in OpenGL ES 3
 	qglEnable(GL_PROGRAM_POINT_SIZE);
+#endif
 	qglDisable( GL_CULL_FACE );
 	qglDisable( GL_BLEND );
 
+#ifndef __EMSCRIPTEN__ // always on in OpenGL ES 3
 	qglEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+#endif
 
 	qglStencilFunc(GL_ALWAYS, 0, 0xff);
 	qglStencilOpSeparate(GL_FRONT, GL_KEEP, GL_INCR_WRAP, GL_KEEP);

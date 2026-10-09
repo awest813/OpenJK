@@ -1906,6 +1906,32 @@ static GLenum RawImage_GetFormat(const byte *data, int numPixels, qboolean light
 		}
 	}
 
+#ifdef __EMSCRIPTEN__
+	// WebGL 2 only takes RGBA pixel data for internal formats with alpha (and
+	// has no luminance formats), so keep everything RGBA
+	switch (internalFormat)
+	{
+	case GL_SRGB8:
+	case GL_SRGB_ALPHA:
+		internalFormat = GL_SRGB8_ALPHA8;
+		break;
+	case GL_RGBA:
+	case GL_RGB5:
+	case GL_RGB8:
+	case GL_RGBA4:
+	case GL_LUMINANCE:
+	case GL_LUMINANCE8:
+	case GL_LUMINANCE16:
+	case GL_LUMINANCE_ALPHA:
+	case GL_LUMINANCE8_ALPHA8:
+	case GL_LUMINANCE16_ALPHA16:
+		internalFormat = GL_RGBA8;
+		break;
+	default:
+		break;
+	}
+#endif
+
 	return internalFormat;
 }
 
@@ -1948,44 +1974,70 @@ static qboolean ShouldUseImmutableTextures(int imageFlags, GLenum internalformat
 	return glRefConfig.immutableTextures;
 }
 
-static void RawImage_UploadTexture( byte *data, int x, int y, int width, int height, GLenum internalFormat, imgType_t type, int flags, qboolean subtexture )
+// The pixel format and type that go with an internal format. OpenGL ES and
+// WebGL only accept these combinations; desktop OpenGL converts others.
+static void GetPixelDataFormat( GLenum internalFormat, GLenum *dataFormat, GLenum *dataType )
 {
-	int dataFormat, dataType;
-
 	switch (internalFormat)
 	{
 	case GL_DEPTH_COMPONENT:
-	case GL_DEPTH_COMPONENT16:
 	case GL_DEPTH_COMPONENT24:
 	case GL_DEPTH_COMPONENT32:
-		dataFormat = GL_DEPTH_COMPONENT;
-		dataType = GL_UNSIGNED_BYTE;
+		*dataFormat = GL_DEPTH_COMPONENT;
+		*dataType = GL_UNSIGNED_INT;
+		break;
+	case GL_DEPTH_COMPONENT16:
+		*dataFormat = GL_DEPTH_COMPONENT;
+		*dataType = GL_UNSIGNED_SHORT;
+		break;
+	case GL_DEPTH24_STENCIL8:
+		*dataFormat = GL_DEPTH_STENCIL;
+		*dataType = GL_UNSIGNED_INT_24_8;
+		break;
+	case GL_R8:
+		*dataFormat = GL_RED;
+		*dataType = GL_UNSIGNED_BYTE;
+		break;
+	case GL_RG8:
+		*dataFormat = GL_RG;
+		*dataType = GL_UNSIGNED_BYTE;
+		break;
+	case GL_R32F:
+		*dataFormat = GL_RED;
+		*dataType = GL_FLOAT;
 		break;
 	case GL_RG16F:
-		dataFormat = GL_RG;
-		dataType = GL_HALF_FLOAT;
+		*dataFormat = GL_RG;
+		*dataType = GL_HALF_FLOAT;
 		break;
 	case GL_RGB16F:
-		dataFormat = GL_RGB;
-		dataType = GL_HALF_FLOAT;
+		*dataFormat = GL_RGB;
+		*dataType = GL_HALF_FLOAT;
 		break;
 	case GL_RGBA16F:
-		dataFormat = GL_RGBA;
-		dataType = GL_HALF_FLOAT;
+		*dataFormat = GL_RGBA;
+		*dataType = GL_HALF_FLOAT;
 		break;
 	case GL_RG32F:
-		dataFormat = GL_RG;
-		dataType = GL_FLOAT;
+		*dataFormat = GL_RG;
+		*dataType = GL_FLOAT;
 		break;
 	case GL_RGBA32F:
-		dataFormat = GL_RGBA;
-		dataType = GL_FLOAT;
+		*dataFormat = GL_RGBA;
+		*dataType = GL_FLOAT;
 		break;
 	default:
-		dataFormat = GL_RGBA;
-		dataType = GL_UNSIGNED_BYTE;
+		*dataFormat = GL_RGBA;
+		*dataType = GL_UNSIGNED_BYTE;
 		break;
 	}
+}
+
+static void RawImage_UploadTexture( byte *data, int x, int y, int width, int height, GLenum internalFormat, imgType_t type, int flags, qboolean subtexture )
+{
+	GLenum dataFormat, dataType;
+
+	GetPixelDataFormat(internalFormat, &dataFormat, &dataType);
 
 	if ( subtexture )
 	{
@@ -2493,7 +2545,7 @@ image_t *R_Create2DImageArray(const char *name, byte *pic, int width, int height
 	image_t		*image;
 	long		hash;
 	int         glWrapClampMode;
-	int			format;
+	GLenum		format;
 
 	if (strlen(name) >= MAX_QPATH) {
 		ri.Error(ERR_DROP, "R_Create2DImageArray: \"%s\" is too long", name);
@@ -2517,25 +2569,15 @@ image_t *R_Create2DImageArray(const char *name, byte *pic, int width, int height
 	else
 		glWrapClampMode = GL_REPEAT;
 
-	switch (internalFormat)
-	{
-	case GL_DEPTH_COMPONENT:
-	case GL_DEPTH_COMPONENT16:
-	case GL_DEPTH_COMPONENT24:
-	case GL_DEPTH_COMPONENT32:
-		format = GL_DEPTH_COMPONENT;
-		break;
-	default:
-		format = GL_BGRA;
-		break;
-	}
+	GLenum dataType;
+	GetPixelDataFormat(internalFormat, &format, &dataType);
 
 	GL_SelectTexture(0);
 	GL_Bind(image);
 	if (ShouldUseImmutableTextures(image->flags, internalFormat))
 		qglTexStorage3D(GL_TEXTURE_2D_ARRAY, 0, internalFormat, width, height, layers);
 	else
-		qglTexImage3D(GL_TEXTURE_2D_ARRAY, 0, internalFormat, width, height, layers, 0, format, GL_UNSIGNED_BYTE, NULL);
+		qglTexImage3D(GL_TEXTURE_2D_ARRAY, 0, internalFormat, width, height, layers, 0, format, dataType, NULL);
 
 	switch (internalFormat)
 	{

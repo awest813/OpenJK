@@ -22,6 +22,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // tr_vbo.c
 #include "tr_local.h"
 
+#ifdef __EMSCRIPTEN__
+// WebGL has no unsynchronized mapping: Emscripten emulates mapping with a copy
+// that is uploaded when the buffer is unmapped or flushed, and needs the
+// mapped range to be invalidated.
+static const GLbitfield streamingMapBits = GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_RANGE_BIT;
+#else
+static const GLbitfield streamingMapBits = GL_MAP_WRITE_BIT | GL_MAP_UNSYNCHRONIZED_BIT;
+#endif
+
 #ifdef _G2_GORE
 #include "G2_gore_r2.h"
 #endif
@@ -591,7 +600,7 @@ void RB_UpdateVBOs(unsigned int attribBits)
 	if (tess.numVertexes > 0 && tess.numVertexes <= SHADER_MAX_VERTEXES)
 	{
 		VBO_t *frameVbo = currentFrame->dynamicVbo;
-		GLbitfield mapFlags = GL_MAP_WRITE_BIT | GL_MAP_UNSYNCHRONIZED_BIT;
+		GLbitfield mapFlags = streamingMapBits;
 		VertexArraysProperties vertexArrays = {};
 		CalculateVertexArraysProperties(attribBits, &vertexArrays);
 
@@ -646,7 +655,7 @@ void RB_UpdateVBOs(unsigned int attribBits)
 	if(tess.numIndexes > 0 && tess.numIndexes <= SHADER_MAX_INDEXES)
 	{
 		IBO_t *frameIbo = currentFrame->dynamicIbo;
-		GLbitfield mapFlags = GL_MAP_WRITE_BIT | GL_MAP_UNSYNCHRONIZED_BIT;
+		GLbitfield mapFlags = streamingMapBits;
 		int totalIndexDataSize = tess.numIndexes * sizeof(tess.indexes[0]);
 
 		R_BindIBO(frameIbo);
@@ -787,8 +796,7 @@ void RB_BeginConstantsUpdate(gpuFrame_t *frame)
 	}
 
 	const GLbitfield mapFlags =
-		GL_MAP_WRITE_BIT |
-		GL_MAP_UNSYNCHRONIZED_BIT |
+		streamingMapBits |
 		GL_MAP_FLUSH_EXPLICIT_BIT;
 
 	frame->uboMapBase = frame->uboWriteOffset;
@@ -817,9 +825,10 @@ int RB_AppendConstantsData(
 
 void RB_EndConstantsUpdate(const gpuFrame_t *frame)
 {
+	// the offset is relative to the start of the mapped range
 	qglFlushMappedBufferRange(
 		GL_UNIFORM_BUFFER,
-		frame->uboMapBase,
+		0,
 		frame->uboWriteOffset - frame->uboMapBase);
 	qglUnmapBuffer(GL_UNIFORM_BUFFER);
 }
