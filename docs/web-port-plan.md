@@ -6,70 +6,100 @@ retail assets.
 
 ## Status
 
-Phase 0 is done and Phase 1 is underway. The JA single-player engine,
-`jagame` and `rdsp-vanilla` build with Emscripten into one
-`openjk_sp.wasm32.{html,js,wasm}`. In a browser it starts, mounts the
-virtual filesystem, statically "loads" the renderer, creates a WebGL
-context through Emscripten's GL emulation and initialises the renderer. It
-hasn't been run with game data yet.
+Built and smoke-tested in headless Chromium, but **not yet run with real game
+data**: there is none in the environment this was developed in. Everything
+below was verified up to each client's main loop with a small made-up
+`.pk3` (see `tools/web/smoke-test.mjs`); rendering actual menus and maps is
+the next thing to check.
 
-### Building
+| Client | Page | Renderer | Verified |
+|---|---|---|---|
+| Single player | `openjk_sp.wasm32.html` | rd-vanilla on WebGL 1 via Emscripten's GL emulation | starts, renderer + sound + UI init, main loop, config persists |
+| Multiplayer | `openjk.wasm32.html` | rd-vanilla, same | as SP, plus UI/cgame/game modules load, connects to a UDP server through the relay |
+| Multiplayer (experimental) | `openjk_rend2.wasm32.html` | rd-rend2 on WebGL 2 | WebGL 2 context, all framebuffers complete, all 671 GLSL programs compile and link, main loop |
+
+### Building and running
 
 ```sh
 # with the Emscripten SDK activated (emsdk_env.sh)
 emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
 cmake --build build-web -j
+
+# serve the build and run the network relay (Node.js, no npm packages)
+node tools/web/server.js --root build-web --port 8080
+# open http://localhost:8080/
+
+# headless smoke test (needs Playwright)
+node tools/web/smoke-test.mjs build-web
 ```
 
-Serve `build-web/` over HTTP and open `openjk_sp.wasm32.html`. The default
-Emscripten page has no game data. To test, use a page that sets
-`Module.arguments` (e.g. `+set fs_basepath /game`) and writes files into
-`Module.FS` from `Module.preRun` (`FS` is exported for this).
+Or with Docker: `docker build -f tools/web/Dockerfile -t openjk-web .` and
+`docker run -p 8080:8080 openjk-web`. Only the runtime stage of that image
+was tested here (its emsdk stage couldn't download the SDL2 port through
+this environment's proxy).
 
-### What the web build changes
+Players add the `.pk3` files of their own copy of the game on the launcher
+page; they are stored in the browser (OPFS) and loaded into memory on
+Play, so a full install needs ~1.5 GB of RAM. Configs and saves live in
+IndexedDB.
 
-- `CMakeLists.txt`: `wasm32` architecture; on Emscripten only the SP client
-  is built, with bundled zlib/png/jpeg and SDL2 from `-sUSE_SDL=2`;
-  `-fwasm-exceptions` for `Com_Error`; modules are built as static libraries
-  (`OpenJKModuleLibraryType`) and `OPENJK_STATIC_MODULES` is defined.
-- Static modules (see §3.1): `shared/sys/sys_static_modules.cpp` replaces
-  `dlopen`/`dlsym` behind the existing `Sys_LoadLibrary` /
-  `Sys_LoadFunction` macros, so the library search code doesn't change.
-  Each module is merged into one relocatable object (`emcc -r`), then
-  `tools/wasm/isolate_module.py` makes its hidden symbols local and gives
-  its exported entry points a prefix (`GetRefAPI` → `renderer_GetRefAPI`).
-  That isolates modules from the engine and from each other, like shared
-  libraries do, so no source changes are needed for duplicate symbols.
-- `shared/sys/sys_main.cpp`: the loop body is now `Sys_Frame()`, which
-  `emscripten_set_main_loop` drives on web.
-- `shared/qcommon/q_platform.h`: `__EMSCRIPTEN__` platform block.
-- Console: the web build uses `con_passive.cpp` and never treats stdin as
-  a TTY, because Emscripten implements stdin reads with `window.prompt()`.
-- rd-vanilla on WebGL:
-  - texture names come from `glGenTextures`, because WebGL can't bind
-    names the app made up;
-  - `qglTexImage2D` sets the internal format to the pixel format, because
-    WebGL 1 has no sized formats and no compression on upload;
-  - the dynamic glow textures are only created when glow is supported,
-    since it needs rectangle textures;
-  - `glDrawElements` is always used, and display lists /
-    `glArrayElement` are stubbed (only reachable through NV combiners).
-- Bundled zlib: `Z_HAVE_UNISTD_H` is now defined for zlib and all its
-  users. Before this, files that included SDL (which defines
-  `HAVE_UNISTD_H`) saw a 64-bit `z_off_t` while minizip saw a 32-bit one.
-  That was a wasm signature mismatch on `unztell`, i.e. a runtime trap.
-- CI: `web` job in `.github/workflows/build.yml`.
+### How it works
 
-### Known issues / next up
+- **Build** (`CMakeLists.txt`): `wasm32` architecture; on Emscripten the
+  clients are built with bundled zlib/png/jpeg, SDL2 from `-sUSE_SDL=2`
+  and `-fwasm-exceptions` (for `Com_Error`). The dedicated server, JK2 and
+  tests aren't built.
+- **Modules** (§3.1): renderer and game modules are static libraries,
+  linked into each client. `tools/wasm/isolate_module.py` merges each one
+  into a relocatable object, makes its hidden symbols local and prefixes
+  its entry points (`GetModuleAPI` → `cgame_GetModuleAPI`), which keeps
+  modules apart the way shared libraries are.
+  `shared/sys/sys_static_modules.cpp` stands in for `dlopen`/`dlsym`
+  behind the existing `Sys_LoadLibrary` macros.
+- **Main loop**: `Sys_Frame()` driven by `emscripten_set_main_loop`;
+  `Com_Frame` skips frames that come early instead of busy-waiting.
+- **Console**: `con_passive.cpp`, never stdin (Emscripten would open
+  `window.prompt()` dialogs).
+- **Files**: `shared/web/shell.html` is the launcher and Emscripten shell
+  for all clients; `FS_FCloseFile` tells it to sync the home directory to
+  IndexedDB after writes.
+- **Networking** (MP): `codemp/qcommon/net_web.cpp` replaces `net_ip.cpp`.
+  Datagrams go over one WebSocket to `tools/web/server.js`, which sends
+  them on as UDP; host names get placeholder addresses the relay
+  resolves. The relay only relays to public addresses on ports ≥ 1024 by
+  default (`--allow` to restrict further, `--allow-private` for LAN
+  play), only passes back replies from addresses a client contacted, and
+  rate-limits clients. Browsers can't accept connections, so a browser
+  can host only local games (with bots), not servers for others.
+- **rd-vanilla on WebGL**: texture names from `glGenTextures`, internal
+  format = pixel format, no texture compression, `glDrawElements` only,
+  glow only when supported, and stubs for GL1 calls the emulation lacks
+  or aborts on.
+- **rd-rend2 on WebGL 2** (separate client, because rd-vanilla needs the
+  GL emulation and rend2 must not have it):
+  - WebGL 2 function lookup with stand-ins for what WebGL lacks;
+  - base vertex draws emulated through the attribute offsets;
+  - GLSL ES 3.00 with layout locations;
+  - no geometry shader programs, so no volume shadows, cube map
+    prefiltering or weather particles;
+  - copy-based buffer mapping (`-sFULL_ES3`);
+  - ES-valid texture upload formats.
+- **Fixes found on the way** (also wrong natively):
+  - three function declaration/definition mismatches in MP;
+  - z_off_t width differing between zlib's users;
+  - int-to-float conversions in rend2 shaders;
+  - rend2's depth upload formats and UBO flush offset.
 
-- Run with real assets: menu, then a map (Phase 1 exit criteria).
-- Emscripten GL emulation warnings: `glShadeModel` TODO, an unhandled
-  `glTexEnvf` pname, one `texParameter` call with no texture bound.
-- `Com_Frame`'s frame limiter busy-waits when `com_maxfps` is below the
-  display refresh rate; on web it should yield instead.
-- Asset import UI (OPFS) and persistent `fs_homepath` (IDBFS) aren't done
-  yet; the default Emscripten HTML page is a placeholder.
-- No ASYNCIFY yet, so the loading screen won't update while a map loads.
+### Known gaps
+
+- Nothing has been rendered with real game data yet. Emscripten's GL
+  emulation is "limited workarounds", and could still abort on texture
+  environment combinations that only real shaders use.
+- No ASYNCIFY, so the loading screen doesn't update while a map loads.
+- Mobile: no touch controls, and the game data needs more memory than most
+  phones give a tab.
+- Mods with their own native code can't be loaded; mods that are only
+  `.pk3` files work.
 
 ## 1. Audit summary
 
@@ -232,32 +262,39 @@ textures depending on `WEBGL_compressed_texture_*` availability.
 - [x] `-fwasm-exceptions` for `Com_Error`.
 - [x] `LEGACY_GL_EMULATION` (WebGL 1 for now); stub missing GL1 bits;
       texture names and formats fixed for WebGL.
-- [ ] Asset loader page (OPFS), IDBFS home path.
+- [x] Asset loader page (OPFS), IDBFS home path.
 - [ ] Milestone check: main menu renders, console works, sound plays.
+      (Engine, renderer, sound and UI initialise; needs real game data.)
 
 ### Phase 2 — SP playable (≈3–4 weeks)
 - [ ] Load `t1_*` maps; fix renderer gaps (fog, sky, ghoul2 surfaces,
       dynamic glow, weather, saber trails, shadows).
 - [ ] ROQ cinematics + MP3 music.
-- [ ] Save/load round-trip, persisted across reloads.
-- [ ] Pointer lock, fullscreen, gamepad, resize.
+- [ ] Save/load round-trip, persisted across reloads. (Written files are
+      persisted, tested with the config file.)
+- [x] Pointer lock, fullscreen, resize (the canvas scales to the window).
+      Gamepad untested.
 - [ ] Perf pass: `-O3`, LTO, `--closure`, profile hot paths in Chrome
       DevTools; target 60 fps on mid-range laptops.
 
 ### Phase 3 — MP (≈4–6 weeks)
-- [ ] Add MP engine + `cgame`/`ui`/`jampgame` modules to the registry.
-- [ ] Network transport abstraction + WebSocket client.
-- [ ] WS↔UDP relay (small Go/Node/Rust service, Docker image alongside
-      the existing `Dockerfile`).
-- [ ] Server browser over HTTPS.
-- [ ] Listen server in-browser (bots work offline).
+- [x] Add MP engine + `cgame`/`ui`/`jampgame` modules to the registry.
+- [x] Network transport + WebSocket client (`net_web.cpp`).
+- [x] WS↔UDP relay (`tools/web/server.js`, `tools/web/Dockerfile`).
+- [x] Server browser: master server queries go through the relay like
+      any other packet (no separate HTTPS list needed).
+- [ ] Listen server in-browser (bots work offline): should work over the
+      loopback, needs real game data to check.
 
 ### Phase 4 — Optional
-- [ ] Native GLES3 path for rd-vanilla (drop GL1 emulation).
-- [ ] rend2 on WebGL2 (§3.4).
-- [ ] Emscripten dynamic linking for mods.
-- [ ] Mobile touch controls.
-- [ ] WebGPU backend (long term).
+- [ ] Native GLES3 path for rd-vanilla (drop GL1 emulation). Not started;
+      worth doing only if the emulation turns out too slow or incomplete
+      with real data.
+- [x] rend2 on WebGL2 (§3.4), experimental, without the geometry shader
+      features.
+- [ ] Emscripten dynamic linking for mods. Not started.
+- [ ] Mobile touch controls. Not started; memory is the bigger obstacle.
+- [ ] WebGPU backend (long term). Not started.
 
 ## 5. Risks
 
