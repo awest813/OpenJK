@@ -31,13 +31,13 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #ifdef OPENJK_STATIC_MODULES
 
-// Only the ABI of these matters (pointers in, pointer out), so the real
-// argument types aren't pulled in here. Names must match the (possibly
-// renamed, see qcommon/q_static_module.h) definitions in the modules.
+// Module entry points, prefixed per module by tools/wasm/isolate_module.py.
+// Only their ABI matters here (pointers in, pointer out), so the real argument
+// types aren't pulled in.
 extern "C" {
-	void *GetRefAPI( int apiVersion, void *rimp );
-	void *GetGameAPI( void *import );
-	void dllEntry( intptr_t (*syscallptr)( intptr_t arg, ... ) );
+	void *renderer_GetRefAPI( int apiVersion, void *rimp );
+	void *game_GetGameAPI( void *import );
+	void game_dllEntry( intptr_t (*syscallptr)( intptr_t arg, ... ) );
 	intptr_t game_vmMain( int command, intptr_t arg0, intptr_t arg1, intptr_t arg2, intptr_t arg3,
 		intptr_t arg4, intptr_t arg5, intptr_t arg6, intptr_t arg7 );
 }
@@ -54,13 +54,13 @@ struct staticModule_t {
 
 #if defined(_JK2EXE)
 static const staticFunction_t rendererFunctions[] = {
-	{ "GetRefAPI", (void *)GetRefAPI },
+	{ "GetRefAPI", (void *)renderer_GetRefAPI },
 	{ NULL, NULL }
 };
 
 static const staticFunction_t gameFunctions[] = {
-	{ "GetGameAPI", (void *)GetGameAPI },
-	{ "dllEntry", (void *)dllEntry },
+	{ "GetGameAPI", (void *)game_GetGameAPI },
+	{ "dllEntry", (void *)game_dllEntry },
 	{ "vmMain", (void *)game_vmMain },
 	{ NULL, NULL }
 };

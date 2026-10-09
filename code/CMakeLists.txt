@@ -472,8 +472,7 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 		endif()
 
 		if(OpenJKStaticModules)
-			# whole-archive keeps the modules intact, as a shared library would be
-			target_link_libraries(${ProjectName} "-Wl,--whole-archive" ${ARGN} "-Wl,--no-whole-archive")
+			openjk_link_static_modules(${ProjectName} ${ARGN})
 		endif()
 	endfunction(add_sp_project)
 	if(BuildSPEngine)

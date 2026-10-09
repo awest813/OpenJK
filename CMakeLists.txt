@@ -349,9 +349,10 @@ if(EMSCRIPTEN)
 	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OPENJK_WEB_FLAGS}")
 
 	# Renderer and game modules are linked into the engine instead of being
-	# dlopen()ed; see shared/sys/sys_static_modules.cpp.
+	# dlopen()ed; see openjk_static_module below.
 	set(OpenJKStaticModules ON)
 	set(OpenJKModuleLibraryType STATIC)
+	find_package(Python3 REQUIRED COMPONENTS Interpreter)
 	set(SharedDefines ${SharedDefines} "OPENJK_STATIC_MODULES")
 else()
 	set(OpenJKStaticModules OFF)
@@ -423,22 +424,39 @@ set(SharedCommonSafeFiles
 	"${SharedDir}/qcommon/safe/limited_vector.h"
 	)
 
-# When modules are statically linked into the engine, code shared between the
-# engine and a module is only linked once (by the engine), and the few
-# conflicting globals are renamed with a per-module prefix.
+# When modules are statically linked into the engine (web builds), each module
+# is merged into one object whose hidden symbols are made local and whose
+# exported symbols get a prefix (GetModuleAPI -> cgame_GetModuleAPI). That
+# keeps modules apart like shared libraries; see tools/wasm/isolate_module.py
+# and shared/sys/sys_static_modules.cpp.
 function(openjk_static_module Target Prefix)
-	get_target_property(Sources ${Target} SOURCES)
-	foreach(Source ${Sources})
-		if(Source MATCHES "/(q_math|q_color|q_string)\\.c$"
-				OR Source MATCHES "/(q_shared|genericparser2)\\.cpp$"
-				OR Source MATCHES "/qcommon/safe/(string|files)\\.cpp$")
-			list(REMOVE_ITEM Sources ${Source})
+	set(ModuleObject "${CMAKE_CURRENT_BINARY_DIR}/${Target}.module.o")
+	add_custom_command(
+		OUTPUT "${ModuleObject}"
+		COMMAND ${CMAKE_CXX_COMPILER} -r -Wl,--whole-archive $<TARGET_FILE:${Target}> -Wl,--no-whole-archive
+			-o "${ModuleObject}.merged.o"
+		COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tools/wasm/isolate_module.py"
+			--prefix ${Prefix} "${ModuleObject}.merged.o" "${ModuleObject}"
+		DEPENDS ${Target} "${CMAKE_SOURCE_DIR}/tools/wasm/isolate_module.py"
+		VERBATIM)
+	add_custom_target(${Target}-isolated DEPENDS "${ModuleObject}")
+	set_property(GLOBAL PROPERTY OpenJKModuleObject_${Target} "${ModuleObject}")
+endfunction()
+
+# Links the isolated objects of the given modules (and their libraries) into Engine.
+function(openjk_link_static_modules Engine)
+	foreach(Module ${ARGN})
+		if(TARGET ${Module})
+			get_property(ModuleObject GLOBAL PROPERTY OpenJKModuleObject_${Module})
+			add_dependencies(${Engine} ${Module}-isolated)
+			set_property(TARGET ${Engine} APPEND PROPERTY LINK_DEPENDS "${ModuleObject}")
+			target_link_libraries(${Engine} "${ModuleObject}")
+			get_target_property(ModuleLibraries ${Module} LINK_LIBRARIES)
+			if(ModuleLibraries)
+				target_link_libraries(${Engine} ${ModuleLibraries})
+			endif()
 		endif()
 	endforeach()
-	set_property(TARGET ${Target} PROPERTY SOURCES ${Sources})
-	set_property(TARGET ${Target} APPEND PROPERTY COMPILE_DEFINITIONS "OPENJK_MODULE_PREFIX=${Prefix}")
-	set_property(TARGET ${Target} APPEND PROPERTY COMPILE_OPTIONS
-		"SHELL:-include ${SharedDir}/qcommon/q_static_module.h")
 endfunction()
 
 #=============================================================================

@@ -35,10 +35,11 @@ Emscripten page has no game data. To test, use a page that sets
 - Static modules (see §3.1): `shared/sys/sys_static_modules.cpp` replaces
   `dlopen`/`dlsym` behind the existing `Sys_LoadLibrary` /
   `Sys_LoadFunction` macros, so the library search code doesn't change.
-  Code shared by the engine and a module (q_math, q_shared, safe/string,
-  safe/files, genericparser2) is linked once. The 13 globals that the
-  engine and a module both define with different meanings are renamed per
-  module by the forced-include header `shared/qcommon/q_static_module.h`.
+  Each module is merged into one relocatable object (`emcc -r`), then
+  `tools/wasm/isolate_module.py` makes its hidden symbols local and gives
+  its exported entry points a prefix (`GetRefAPI` → `renderer_GetRefAPI`).
+  That isolates modules from the engine and from each other, like shared
+  libraries do, so no source changes are needed for duplicate symbols.
 - `shared/sys/sys_main.cpp`: the loop body is now `Sys_Frame()`, which
   `emscripten_set_main_loop` drives on web.
 - `shared/qcommon/q_platform.h`: `__EMSCRIPTEN__` platform block.
