@@ -468,6 +468,10 @@ static inline void qglNewList( GLuint list, GLenum mode ) {}
 static inline void qglPopAttrib( void ) {}
 static inline void qglPushAttrib( GLbitfield mask ) {}
 
+// WebGL always draws to the back buffer, and the emulation aborts on this
+#undef qglDrawBuffer
+static inline void qglDrawBuffer( GLenum mode ) {}
+
 // WebGL 1 has neither sized internal formats (GL_RGB8, GL_RGBA4, ...) nor
 // compression on upload: the internal format has to match the pixel data.
 #undef qglTexImage2D

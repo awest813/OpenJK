@@ -1518,6 +1518,10 @@ void Com_Frame( void ) {
 			timeBeforeFirstEvents = Sys_Milliseconds ();
 		}
 
+#ifdef __EMSCRIPTEN__
+		const int lastBias = bias;
+#endif
+
 		// Figure out how much time we have
 		if(!com_timedemo->integer)
 		{
@@ -1548,6 +1552,15 @@ void Com_Frame( void ) {
 		else
 			minMsec = 1;
 
+#ifdef __EMSCRIPTEN__
+		// The browser runs the frame loop (requestAnimationFrame), so a frame
+		// that comes too early is skipped instead of waited for.
+		NET_Sleep( 0 );
+		if ( Com_TimeVal( minMsec ) ) {
+			bias = lastBias;
+			return;
+		}
+#else
 		timeVal = Com_TimeVal(minMsec);
 		do {
 			// Busy sleep the last millisecond for better timeout precision
@@ -1556,6 +1569,7 @@ void Com_Frame( void ) {
 			else
 				NET_Sleep(timeVal - 1);
 		} while( (timeVal = Com_TimeVal(minMsec)) != 0 );
+#endif
 		IN_Frame();
 
 		lastTime = com_frameTime;

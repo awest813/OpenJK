@@ -1401,6 +1401,10 @@ void Com_Frame( void ) {
 			timeBeforeFirstEvents = Sys_Milliseconds ();
 		}
 
+#ifdef __EMSCRIPTEN__
+		const int lastBias = bias;
+#endif
+
 		// Figure out how much time we have
 		if(com_minimized->integer && com_maxfpsMinimized->integer > 0)
 			minMsec = 1000 / com_maxfpsMinimized->integer;
@@ -1421,6 +1425,14 @@ void Com_Frame( void ) {
 		// that framerate is stable at the requested value.
 		minMsec -= bias;
 
+#ifdef __EMSCRIPTEN__
+		// The browser runs the frame loop (requestAnimationFrame), so a frame
+		// that comes too early is skipped instead of waited for.
+		if ( Com_TimeVal( minMsec ) ) {
+			bias = lastBias;
+			return;
+		}
+#else
 		timeVal = Com_TimeVal(minMsec);
 		do {
 			// Busy sleep the last millisecond for better timeout precision
@@ -1429,6 +1441,7 @@ void Com_Frame( void ) {
 			else
 				Sys_Sleep(timeVal - 1);
 		} while( (timeVal = Com_TimeVal(minMsec)) != 0 );
+#endif
 		IN_Frame();
 
 		lastTime = com_frameTime;

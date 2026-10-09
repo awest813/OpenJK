@@ -244,7 +244,6 @@ if(BuildMPEngine OR BuildMPDed)
 		"${MPDir}/qcommon/matcomp.h"
 		"${MPDir}/qcommon/matcomp.cpp"
 		"${MPDir}/qcommon/net_chan.cpp"
-		"${MPDir}/qcommon/net_ip.cpp"
 		"${MPDir}/qcommon/persistence.cpp"
 		"${MPDir}/qcommon/q_shared.cpp"
 		"${MPDir}/qcommon/qcommon.h"
@@ -266,6 +265,12 @@ if(BuildMPEngine OR BuildMPDed)
 	if(WIN32)
 		set(MPEngineAndDedCommonFiles ${MPEngineAndDedCommonFiles})
 	endif(WIN32)
+	# browsers can't use UDP sockets; see net_web.cpp
+	if(EMSCRIPTEN)
+		set(MPEngineAndDedCommonFiles ${MPEngineAndDedCommonFiles} "${MPDir}/qcommon/net_web.cpp")
+	else()
+		set(MPEngineAndDedCommonFiles ${MPEngineAndDedCommonFiles} "${MPDir}/qcommon/net_ip.cpp")
+	endif()
 	source_group("common" FILES ${MPEngineAndDedCommonFiles})
 	set(MPEngineAndDedFiles ${MPEngineAndDedFiles} ${MPEngineAndDedCommonFiles})
 
