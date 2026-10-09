@@ -448,36 +448,124 @@ extern PFNGLLOCKARRAYSEXTPROC qglLockArraysEXT;
 extern PFNGLUNLOCKARRAYSEXTPROC qglUnlockArraysEXT;
 
 #ifdef __EMSCRIPTEN__
-// Emscripten's fixed-function GL emulation doesn't implement these. They are
-// only reached through NV_register_combiners, display list surfaces,
-// r_primitives 1 and shader gamma correction, none of which are used on WebGL.
+// WebGL 2 has no fixed-function pipeline: these calls go to the OpenGL 1.x
+// layer in shared/webgl/qgl_fixed.cpp instead. The other GL 1.1 calls
+// (blending, depth, stencil, ...) are WebGL's own.
+#include "webgl/qgl_fixed.h"
+#undef qglBegin
+#define qglBegin glfBegin
+#undef qglEnd
+#define qglEnd glfEnd
+#undef qglVertex2f
+#define qglVertex2f glfVertex2f
+#undef qglVertex3f
+#define qglVertex3f glfVertex3f
+#undef qglVertex3fv
+#define qglVertex3fv glfVertex3fv
+#undef qglTexCoord2f
+#define qglTexCoord2f glfTexCoord2f
+#undef qglTexCoord2fv
+#define qglTexCoord2fv glfTexCoord2fv
+#undef qglColor3f
+#define qglColor3f glfColor3f
+#undef qglColor4f
+#define qglColor4f glfColor4f
+#undef qglColor4ub
+#define qglColor4ub glfColor4ub
+#undef qglColor4ubv
+#define qglColor4ubv glfColor4ubv
+#undef qglMatrixMode
+#define qglMatrixMode glfMatrixMode
+#undef qglLoadIdentity
+#define qglLoadIdentity glfLoadIdentity
+#undef qglLoadMatrixf
+#define qglLoadMatrixf glfLoadMatrixf
+#undef qglPushMatrix
+#define qglPushMatrix glfPushMatrix
+#undef qglPopMatrix
+#define qglPopMatrix glfPopMatrix
+#undef qglOrtho
+#define qglOrtho glfOrtho
+#undef qglTranslatef
+#define qglTranslatef glfTranslatef
+#undef qglRotatef
+#define qglRotatef glfRotatef
+#undef qglEnable
+#define qglEnable glfEnable
+#undef qglDisable
+#define qglDisable glfDisable
+#undef qglIsEnabled
+#define qglIsEnabled glfIsEnabled
+#undef qglEnableClientState
+#define qglEnableClientState glfEnableClientState
+#undef qglDisableClientState
+#define qglDisableClientState glfDisableClientState
+#undef qglVertexPointer
+#define qglVertexPointer glfVertexPointer
+#undef qglColorPointer
+#define qglColorPointer glfColorPointer
+#undef qglTexCoordPointer
+#define qglTexCoordPointer glfTexCoordPointer
+#undef qglDrawElements
+#define qglDrawElements glfDrawElements
+#undef qglDrawArrays
+#define qglDrawArrays glfDrawArrays
 #undef qglArrayElement
-#undef qglCallList
-#undef qglDeleteLists
-#undef qglEndList
-#undef qglGenLists
-#undef qglNewList
-#undef qglPopAttrib
-#undef qglPushAttrib
-static inline void APIENTRY qglArrayElement( GLint i ) {}
-static inline void qglCallList( GLuint list ) {}
-static inline void qglDeleteLists( GLuint list, GLsizei range ) {}
-static inline void qglEndList( void ) {}
-static inline GLuint qglGenLists( GLsizei range ) { return 0; }
-static inline void qglNewList( GLuint list, GLenum mode ) {}
-static inline void qglPopAttrib( void ) {}
-static inline void qglPushAttrib( GLbitfield mask ) {}
-
-// WebGL always draws to the back buffer, and the emulation aborts on this
-#undef qglDrawBuffer
-static inline void qglDrawBuffer( GLenum mode ) {}
-
-// WebGL 1 has neither sized internal formats (GL_RGB8, GL_RGBA4, ...) nor
-// compression on upload: the internal format has to match the pixel data.
+#define qglArrayElement glfArrayElement
+#undef qglTexEnvf
+#define qglTexEnvf glfTexEnvf
+#undef qglTexEnvi
+#define qglTexEnvi glfTexEnvi
+#undef qglAlphaFunc
+#define qglAlphaFunc glfAlphaFunc
+#undef qglFogf
+#define qglFogf glfFogf
+#undef qglFogi
+#define qglFogi glfFogi
+#undef qglFogfv
+#define qglFogfv glfFogfv
+#undef qglClipPlane
+#define qglClipPlane glfClipPlane
 #undef qglTexImage2D
-static inline void qglTexImage2D( GLenum target, GLint level, GLint internalformat, GLsizei width,
-	GLsizei height, GLint border, GLenum format, GLenum type, const GLvoid *pixels )
-{
-	glTexImage2D( target, level, format, width, height, border, format, type, pixels );
-}
+#define qglTexImage2D glfTexImage2D
+#undef qglTexParameterf
+#define qglTexParameterf glfTexParameterf
+#undef qglTexParameteri
+#define qglTexParameteri glfTexParameteri
+#undef qglTexParameterfv
+#define qglTexParameterfv glfTexParameterfv
+#undef qglCopyTexImage2D
+#define qglCopyTexImage2D glfCopyTexImage2D
+#undef qglCopyTexSubImage2D
+#define qglCopyTexSubImage2D glfCopyTexSubImage2D
+#undef qglReadPixels
+#define qglReadPixels glfReadPixels
+#undef qglGetIntegerv
+#define qglGetIntegerv glfGetIntegerv
+#undef qglGetFloatv
+#define qglGetFloatv glfGetFloatv
+#undef qglClearDepth
+#define qglClearDepth glfClearDepth
+#undef qglDepthRange
+#define qglDepthRange glfDepthRange
+#undef qglDrawBuffer
+#define qglDrawBuffer glfDrawBuffer
+#undef qglPolygonMode
+#define qglPolygonMode glfPolygonMode
+#undef qglShadeModel
+#define qglShadeModel glfShadeModel
+#undef qglPushAttrib
+#define qglPushAttrib glfPushAttrib
+#undef qglPopAttrib
+#define qglPopAttrib glfPopAttrib
+#undef qglGenLists
+#define qglGenLists glfGenLists
+#undef qglNewList
+#define qglNewList glfNewList
+#undef qglEndList
+#define qglEndList glfEndList
+#undef qglCallList
+#define qglCallList glfCallList
+#undef qglDeleteLists
+#define qglDeleteLists glfDeleteLists
 #endif

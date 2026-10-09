@@ -110,6 +110,15 @@ set(MPVanillaRendererCommonSafeFiles
 source_group("common/safe" FILES ${MPVanillaRendererCommonSafeFiles})
 set(MPVanillaRendererFiles ${MPVanillaRendererFiles} ${MPVanillaRendererCommonSafeFiles})
 
+if(EMSCRIPTEN)
+	# the OpenGL 1.x the renderer uses, on WebGL 2
+	set(MPVanillaRendererWebGLFiles
+		"${SharedDir}/webgl/qgl_fixed.cpp"
+		"${SharedDir}/webgl/qgl_fixed.h")
+	source_group("webgl" FILES ${MPVanillaRendererWebGLFiles})
+	set(MPVanillaRendererFiles ${MPVanillaRendererFiles} ${MPVanillaRendererWebGLFiles})
+endif()
+
 # Transparently use either bundled or system libjpeg.
 list(APPEND MPVanillaRendererIncludeDirectories ${JPEG_INCLUDE_DIR})
 list(APPEND MPVanillaRendererLibraries          ${JPEG_LIBRARIES})

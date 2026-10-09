@@ -444,6 +444,13 @@ extern bool g_bDynamicGlowSupported;
 extern bool g_bARBShadersAvailable;
 static void GLimp_InitExtensions( void )
 {
+#ifdef __EMSCRIPTEN__
+	// the extensions are those of the fixed-function layer on WebGL 2
+	// (shared/webgl/qgl_fixed.cpp)
+	ri.GL_ExtensionSupported = (qboolean (*)( const char * ))GLF_ExtensionSupported;
+	ri.GL_GetProcAddress = GLF_GetProcAddress;
+#endif
+
 	if ( !r_allowExtensions->integer )
 	{
 		Com_Printf ("*** IGNORING OPENGL EXTENSIONS ***\n" );

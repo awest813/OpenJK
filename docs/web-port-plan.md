@@ -14,7 +14,7 @@ the next thing to check.
 
 | Client | Page | Renderer | Verified |
 |---|---|---|---|
-| Single player | `openjk_sp.wasm32.html` | rd-vanilla on WebGL 1 via Emscripten's GL emulation | starts, renderer + sound + UI init, main loop, config persists |
+| Single player | `openjk_sp.wasm32.html` | rd-vanilla on WebGL 2 (`shared/webgl/qgl_fixed.cpp`) | starts, renderer + sound + UI init, main loop, config persists |
 | Multiplayer | `openjk.wasm32.html` | rd-vanilla, same | as SP, plus UI/cgame/game modules load, connects to a UDP server through the relay |
 | Multiplayer (experimental) | `openjk_rend2.wasm32.html` | rd-rend2 on WebGL 2 | WebGL 2 context, all framebuffers complete, all 671 GLSL programs compile and link, main loop |
 
@@ -81,10 +81,23 @@ IndexedDB.
   play), only passes back replies from addresses a client contacted, and
   rate-limits clients. Browsers can't accept connections, so a browser
   can host only local games (with bots), not servers for others.
-- **rd-vanilla on WebGL**: texture names from `glGenTextures`, internal
-  format = pixel format, no texture compression, `glDrawElements` only,
-  glow only when supported, and stubs for GL1 calls the emulation lacks
-  or aborts on.
+- **rd-vanilla on WebGL 2**: `shared/webgl/qgl_fixed.cpp` implements the
+  OpenGL 1.x subset the vanilla renderers use, and `qgl.h` points their
+  fixed-function calls at it:
+  - matrix stacks;
+  - immediate mode and client-side arrays, streamed into buffers;
+  - quads and polygons drawn as triangles;
+  - texture environments (modulate, replace, decal, add) on two units;
+  - alpha test, fog and the clip plane.
+
+  One shader does all of it from uniforms, so nothing compiles mid-game.
+  The renderers also get texture names from `glGenTextures`, have no
+  texture compression, always use `glDrawElements` and only create glow
+  textures when glow is supported. `tools/web/qgl-fixed-test.cpp` checks
+  each feature's pixels, and the smoke test runs it.
+
+  This replaced Emscripten's `LEGACY_GL_EMULATION`, which rendered even
+  the console as stray triangles.
 - **rd-rend2 on WebGL 2** (separate client, because rd-vanilla needs the
   GL emulation and rend2 must not have it):
   - WebGL 2 function lookup with stand-ins for what WebGL lacks;
@@ -102,9 +115,8 @@ IndexedDB.
 
 ### Known gaps
 
-- Nothing has been rendered with real game data yet. Emscripten's GL
-  emulation is "limited workarounds", and could still abort on texture
-  environment combinations that only real shaders use.
+- Nothing has been rendered with real game data yet; only the console,
+  the UI cursor and the pixel tests have been looked at.
 - Mobile: no touch controls, and the game data needs more memory than most
   phones give a tab.
 - Mods with their own native code can't be loaded; mods that are only
@@ -296,9 +308,8 @@ textures depending on `WEBGL_compressed_texture_*` availability.
       loopback, needs real game data to check.
 
 ### Phase 4 — Optional
-- [ ] Native GLES3 path for rd-vanilla (drop GL1 emulation). Not started;
-      worth doing only if the emulation turns out too slow or incomplete
-      with real data.
+- [x] WebGL 2 path for rd-vanilla instead of Emscripten's GL1 emulation
+      (`shared/webgl/qgl_fixed.cpp`).
 - [x] rend2 on WebGL2 (§3.4), experimental, without the geometry shader
       features.
 - [ ] Emscripten dynamic linking for mods. Not started.

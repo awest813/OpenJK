@@ -367,11 +367,11 @@ if(EMSCRIPTEN)
 		)
 	configure_file("${CMAKE_SOURCE_DIR}/shared/web/index.html" "${CMAKE_BINARY_DIR}/index.html" COPYONLY)
 
-	# The vanilla renderers are fixed-function OpenGL, which only runs on WebGL
-	# through Emscripten's emulation; rend2 needs WebGL 2 without it.
+	# All renderers use WebGL 2. The vanilla renderers' fixed-function OpenGL
+	# is implemented on it by shared/webgl/qgl_fixed.cpp.
 	set(OpenJKWebVanillaLinkOptions
-		"-sLEGACY_GL_EMULATION=1"
-		"-sGL_UNSAFE_OPTS=0"
+		"-sMIN_WEBGL_VERSION=2"
+		"-sMAX_WEBGL_VERSION=2"
 		)
 	set(OpenJKWebRend2LinkOptions
 		"-sMIN_WEBGL_VERSION=2"
@@ -561,6 +561,17 @@ if(BuildJK2SPGame)
 endif()
 
 add_subdirectory(${MPDir})
+
+if(EMSCRIPTEN)
+	# pixel tests for the vanilla renderers' OpenGL 1.x on WebGL 2, run by
+	# tools/web/smoke-test.mjs
+	add_executable(qgl-fixed-test
+		"${CMAKE_SOURCE_DIR}/tools/web/qgl-fixed-test.cpp"
+		"${SharedDir}/webgl/qgl_fixed.cpp")
+	target_include_directories(qgl-fixed-test PRIVATE "${SharedDir}")
+	target_link_libraries(qgl-fixed-test ${OpenJKWebVanillaLinkOptions})
+	set_target_properties(qgl-fixed-test PROPERTIES SUFFIX ".html")
+endif()
 
 if(BuildSymbolServer)
 	add_subdirectory("tools/WinSymbol")

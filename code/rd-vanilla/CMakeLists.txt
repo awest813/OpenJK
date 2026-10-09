@@ -149,6 +149,15 @@ if(BuildSPRdVanilla OR BuildJK2SPRdVanilla)
 	source_group("rd-common" FILES ${SPRDVanillaRdCommonFiles})
 	set(SPRDVanillaFiles ${SPRDVanillaFiles} ${SPRDVanillaRdCommonFiles})
 
+	if(EMSCRIPTEN)
+		# the OpenGL 1.x the renderer uses, on WebGL 2
+		set(SPRDVanillaWebGLFiles
+			"${SharedDir}/webgl/qgl_fixed.cpp"
+			"${SharedDir}/webgl/qgl_fixed.h")
+		source_group("webgl" FILES ${SPRDVanillaWebGLFiles})
+		set(SPRDVanillaFiles ${SPRDVanillaFiles} ${SPRDVanillaWebGLFiles})
+	endif()
+
 	if(NOT EMSCRIPTEN)
 		find_package(OpenGL REQUIRED)
 		set(SPRDVanillaRendererIncludeDirectories ${SPRDVanillaRendererIncludeDirectories} ${OPENGL_INCLUDE_DIR})

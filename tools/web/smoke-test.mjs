@@ -101,7 +101,9 @@ const testData = makeZip({
 	'ext_data/Siege/Classes/smoke.scl': 'ClassInfo\n{\n\tname "Smoke"\n\tweapons WP_NONE\n\tuishader "textures/smoke"\n}\n',
 	'ext_data/Siege/Teams/smoke.team': 'name "SmokeTeam"\nClasses\n{\n\tclass1 "Smoke"\n}\n',
 	'ui/jampmenus.txt': '{\n}\n',
-	'ui/menus.txt': '{\n}\n',
+	// SP: a main menu to show, so that frames get drawn
+	'ui/menus.txt': '{\nloadMenu { "ui/main.menu" }\n}\n',
+	'ui/main.menu': '{\nmenuDef\n{\nname "mainMenu"\nfullscreen 0\nrect 0 0 640 480\n}\n}\n',
 });
 
 //============================================================================
@@ -170,6 +172,30 @@ async function runClient(browser, page, { args = '', expect = [], addData = true
 	return { lines, errors, missing };
 }
 
+// tools/web/qgl-fixed-test.cpp: the vanilla renderers' OpenGL 1.x on WebGL 2
+async function runPixelTests(browser) {
+	if (!fs.existsSync(path.join(buildDir, 'qgl-fixed-test.html'))) {
+		console.log('SKIP OpenGL 1.x pixel tests (not built)');
+		return true;
+	}
+	const page = await browser.newPage();
+	const lines = [];
+	page.on('console', (message) => lines.push(message.text()));
+	await page.goto(`http://localhost:${httpPort}/qgl-fixed-test.html`);
+	await page.waitForFunction(() => document.title !== '' && window.Module && Module.calledRun, null, { timeout: 60000 }).catch(() => {});
+	const deadline = Date.now() + 30000;
+	while (Date.now() < deadline && !lines.some((line) => line.startsWith('qgl_fixed:'))) {
+		await page.waitForTimeout(250);
+	}
+	await page.close();
+	const summary = lines.find((line) => line.startsWith('qgl_fixed:')) || 'no result';
+	const failed = lines.filter((line) => line.startsWith('FAIL'));
+	const ok = !failed.length && summary !== 'no result';
+	console.log(`${ok ? 'PASS' : 'FAIL'} OpenGL 1.x on WebGL 2 (${summary})`);
+	for (const line of failed) console.log(`  ${line}`);
+	return ok;
+}
+
 function report(name, result) {
 	const ok = !result.errors.length && !result.missing.length;
 	console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`);
@@ -190,6 +216,7 @@ async function main() {
 	});
 	let ok = true;
 	try {
+		ok = await runPixelTests(browser) && ok;
 		for (const client of [
 			{ name: 'SP client', file: 'openjk_sp.wasm32.html', config: 'openjk_sp.cfg' },
 			// the build without JSPI, for browsers that don't have it
