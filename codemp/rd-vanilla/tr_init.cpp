@@ -341,7 +341,12 @@ static void GLW_InitTextureCompression( void )
 		Com_Printf ("...GL_EXT_texture_compression_s3tc available\n" );
 	}
 
+#ifdef __EMSCRIPTEN__
+	// WebGL can't compress textures on upload (see qglTexImage2D in qgl.h)
+	if ( true )
+#else
 	if ( !r_ext_compressed_textures->value )
+#endif
 	{
 		// Compressed textures are off
 		glConfig.textureCompression = TC_NONE;
@@ -1458,11 +1463,15 @@ void GfxInfo_f( void )
 		ri.Printf( PRINT_ALL, "rendering primitives: " );
 		primitives = r_primitives->integer;
 		if ( primitives == 0 ) {
+#ifdef __EMSCRIPTEN__
+			primitives = 2;
+#else
 			if ( qglLockArraysEXT ) {
 				primitives = 2;
 			} else {
 				primitives = 1;
 			}
+#endif
 		}
 		if ( primitives == -1 ) {
 			ri.Printf( PRINT_ALL, "none\n" );
