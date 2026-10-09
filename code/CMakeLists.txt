@@ -461,6 +461,7 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 		if(EMSCRIPTEN)
 			# emit an HTML page to host the engine next to the .js/.wasm
 			set_target_properties(${ProjectName} PROPERTIES SUFFIX ".html")
+			set_property(TARGET ${ProjectName} APPEND PROPERTY LINK_DEPENDS "${CMAKE_SOURCE_DIR}/shared/web/shell.html")
 		endif()
 
 		if(OpenJKStaticModules)

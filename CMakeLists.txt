@@ -360,10 +360,14 @@ if(EMSCRIPTEN)
 		"-sLEGACY_GL_EMULATION=1"
 		"-sGL_UNSAFE_OPTS=0"
 		"-sALLOW_MEMORY_GROWTH=1"
-		# lets the hosting page put game data into the virtual filesystem
+		# the launcher page (shared/web/shell.html) loads the game data into
+		# the virtual file system and keeps the home directory in IndexedDB
 		"-sFORCE_FILESYSTEM=1"
-		"-sEXPORTED_RUNTIME_METHODS=FS"
+		"-lidbfs.js"
+		"-sEXPORTED_RUNTIME_METHODS=FS,IDBFS,addRunDependency,removeRunDependency"
+		"--shell-file" "${CMAKE_SOURCE_DIR}/shared/web/shell.html"
 		)
+	configure_file("${CMAKE_SOURCE_DIR}/shared/web/index.html" "${CMAKE_BINARY_DIR}/index.html" COPYONLY)
 	set(SharedDefines ${SharedDefines} "OPENJK_STATIC_MODULES")
 else()
 	set(OpenJKStaticModules OFF)

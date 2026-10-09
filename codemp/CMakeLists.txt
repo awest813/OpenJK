@@ -638,6 +638,7 @@ if(BuildMPEngine)
 	if(EMSCRIPTEN)
 		# emit an HTML page to host the engine next to the .js/.wasm
 		set_target_properties(${MPEngine} PROPERTIES SUFFIX ".html")
+		set_property(TARGET ${MPEngine} APPEND PROPERTY LINK_DEPENDS "${CMAKE_SOURCE_DIR}/shared/web/shell.html")
 	endif()
 	if(OpenJKStaticModules)
 		openjk_link_static_modules(${MPEngine} ${MPVanillaRenderer} ${MPGame} ${MPCGame} ${MPUI})

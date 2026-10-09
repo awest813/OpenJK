@@ -1,0 +1,441 @@
+<!doctype html>
+<!--
+OpenJK web launcher. emcc uses this as the shell page (--shell-file) for the
+SP and MP clients and puts the engine's script tag at the SCRIPT marker at
+the end.
+
+The game data stays in this browser: .pk3 files go into the origin private
+file system (OPFS) and are loaded into the engine's memory file system when
+the game starts; the home directory (configs, saves, screenshots) lives in
+IndexedDB.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenJK</title>
+<style>
+	:root {
+		--bg: #0d0f12;
+		--panel: #171a20;
+		--line: #2a2f38;
+		--text: #e6e8eb;
+		--muted: #9aa1ab;
+		--accent: #4f9cf0;
+		--danger: #e0605a;
+	}
+	* { box-sizing: border-box; }
+	html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+		font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+	#launcher { max-width: 720px; margin: 0 auto; padding: 32px 16px 48px; }
+	h1 { font-size: 28px; margin: 0 0 4px; }
+	h2 { font-size: 17px; margin: 0 0 8px; }
+	p { margin: 0 0 12px; }
+	.muted { color: var(--muted); }
+	section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+		padding: 16px; margin: 16px 0; }
+	.buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+	button, .button { display: inline-block; font: inherit; color: var(--text); background: #232833;
+		border: 1px solid var(--line); border-radius: 6px; padding: 7px 14px; cursor: pointer; }
+	button:hover, .button:hover { border-color: var(--accent); }
+	button:disabled { opacity: .5; cursor: default; border-color: var(--line); }
+	#play { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
+		padding: 10px 28px; font-size: 16px; }
+	ul { list-style: none; margin: 0; padding: 0; }
+	li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+	li:first-child { border-top: 0; }
+	li .name { flex: 1; overflow-wrap: anywhere; }
+	li .size { color: var(--muted); font-variant-numeric: tabular-nums; }
+	li button { padding: 2px 10px; font-size: 13px; }
+	label.field { display: block; margin: 8px 0; }
+	label.field span { display: block; color: var(--muted); font-size: 13px; margin-bottom: 4px; }
+	input[type=text] { width: 100%; font: inherit; color: var(--text); background: var(--bg);
+		border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; }
+	#status { min-height: 1.5em; color: var(--muted); }
+	#status.error { color: var(--danger); }
+	#game { position: fixed; inset: 0; background: #000; }
+	#canvas { display: block; width: 100%; height: 100%; object-fit: contain; outline: none; }
+	#game-bar { position: fixed; top: 8px; right: 8px; display: flex; gap: 6px; opacity: .25; transition: opacity .2s; }
+	#game-bar:hover { opacity: 1; }
+	#log { position: fixed; left: 0; right: 0; bottom: 0; max-height: 40vh; overflow: auto; margin: 0;
+		padding: 8px 12px; background: rgba(0,0,0,.85); color: #cfd3d8; font: 12px/1.4 ui-monospace, monospace;
+		white-space: pre-wrap; }
+	[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div id="launcher">
+	<h1>OpenJK</h1>
+	<p class="muted" id="mode">Star Wars Jedi Knight: Jedi Academy in your browser.</p>
+
+	<section>
+		<h2>Game data</h2>
+		<p>OpenJK needs the data files from your own copy of Jedi Academy: the <code>.pk3</code>
+			files in its <code>GameData/base</code> folder. They are stored in this browser only
+			and are never uploaded.</p>
+		<div class="buttons">
+			<label class="button">Add .pk3 files<input type="file" id="add-files" multiple accept=".pk3" hidden></label>
+			<label class="button">Add a game folder<input type="file" id="add-folder" webkitdirectory hidden></label>
+		</div>
+		<ul id="file-list"></ul>
+		<p class="muted" id="storage"></p>
+	</section>
+
+	<section>
+		<h2>Options</h2>
+		<label class="field"><span>Extra command line, e.g. <code>+set fs_game mymod</code></span>
+			<input type="text" id="args" spellcheck="false" autocomplete="off"></label>
+		<label class="field" id="relay-field" hidden><span>Network relay (empty: the relay of this page's server)</span>
+			<input type="text" id="relay" spellcheck="false" autocomplete="off" placeholder="wss://example.com/relay"></label>
+	</section>
+
+	<p><button id="play" disabled>Loading…</button></p>
+	<p id="status"></p>
+</div>
+
+<div id="game" hidden>
+	<canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+	<div id="game-bar">
+		<button id="fullscreen">Fullscreen</button>
+		<button id="show-log">Log</button>
+	</div>
+</div>
+<pre id="log" hidden></pre>
+
+<script>
+'use strict';
+
+(function () {
+	const $ = (id) => document.getElementById(id);
+	const isMultiplayer = !/openjk_sp/.test(location.pathname);
+	const homePath = '/home/web_user/.local/share/openjk';
+	const gamePath = '/game';
+	const logLines = [];
+	let started = false;
+
+	$('mode').textContent = isMultiplayer
+		? 'Jedi Academy multiplayer in your browser.'
+		: 'Jedi Academy single player in your browser.';
+	$('relay-field').hidden = !isMultiplayer;
+	document.title = isMultiplayer ? 'OpenJK' : 'OpenJK Single Player';
+
+	function setStatus(text, isError) {
+		$('status').textContent = text;
+		$('status').classList.toggle('error', !!isError);
+	}
+
+	function log(text) {
+		console.log(text);
+		logLines.push(text);
+		if (logLines.length > 1000) {
+			logLines.shift();
+		}
+		if (!$('log').hidden) {
+			$('log').textContent = logLines.join('\n');
+			$('log').scrollTop = $('log').scrollHeight;
+		}
+	}
+
+	function formatSize(bytes) {
+		if (bytes >= 1 << 30) return (bytes / (1 << 30)).toFixed(2) + ' GB';
+		if (bytes >= 1 << 20) return (bytes / (1 << 20)).toFixed(1) + ' MB';
+		return Math.ceil(bytes / 1024) + ' KB';
+	}
+
+	function loadSetting(name) {
+		try { return localStorage.getItem('openjk.' + name) || ''; } catch (e) { return ''; }
+	}
+
+	function saveSetting(name, value) {
+		try { localStorage.setItem('openjk.' + name, value); } catch (e) { /* not essential */ }
+	}
+
+	//========================================================================
+	// Game data store: OPFS when available, otherwise this session only
+
+	const store = {
+		root: null,
+		memory: new Map(), // path -> File, when OPFS isn't available
+
+		async init() {
+			try {
+				if (navigator.storage && navigator.storage.getDirectory) {
+					const root = await navigator.storage.getDirectory();
+					const dir = await root.getDirectoryHandle('openjk-gamedata', { create: true });
+					// writing needs createWritable, which not every browser has yet
+					const probe = await dir.getFileHandle('.probe', { create: true });
+					if (probe.createWritable) {
+						await dir.removeEntry('.probe');
+						this.root = dir;
+						if (navigator.storage.persist) {
+							navigator.storage.persist();
+						}
+						return;
+					}
+				}
+			} catch (e) {
+				console.warn('OPFS unavailable', e);
+			}
+			setStatus('This browser can\'t keep game files, so they have to be added again on every visit.');
+		},
+
+		async directory(path, create) {
+			let dir = this.root;
+			for (const part of path.split('/').slice(0, -1)) {
+				dir = await dir.getDirectoryHandle(part, { create });
+			}
+			return dir;
+		},
+
+		async add(path, file) {
+			if (!this.root) {
+				this.memory.set(path, file);
+				return;
+			}
+			const dir = await this.directory(path, true);
+			const handle = await dir.getFileHandle(path.split('/').pop(), { create: true });
+			const writable = await handle.createWritable();
+			await file.stream().pipeTo(writable);
+		},
+
+		async remove(path) {
+			if (!this.root) {
+				this.memory.delete(path);
+				return;
+			}
+			const dir = await this.directory(path, false);
+			await dir.removeEntry(path.split('/').pop());
+		},
+
+		async list() {
+			if (!this.root) {
+				return [...this.memory].map(([path, file]) => ({ path, size: file.size, file }));
+			}
+			const files = [];
+			const walk = async (dir, prefix) => {
+				for await (const [name, handle] of dir.entries()) {
+					if (handle.kind === 'directory') {
+						await walk(handle, prefix + name + '/');
+					} else {
+						const file = await handle.getFile();
+						files.push({ path: prefix + name, size: file.size, file });
+					}
+				}
+			};
+			await walk(this.root, '');
+			return files.sort((a, b) => a.path.localeCompare(b.path));
+		},
+	};
+
+	// Where a picked file goes: "base/assets0.pk3", "mymod/zz.pk3", ...
+	function gamePathFor(file) {
+		const parts = (file.webkitRelativePath || file.name).split('/').filter(Boolean);
+		if (parts.length > 1) {
+			parts.shift(); // the folder that was picked
+		}
+		const lower = parts.map((part) => part.toLowerCase());
+		const known = lower.lastIndexOf('base');
+		if (known > 0) {
+			parts.splice(0, known); // ".../GameData/base/x.pk3" -> "base/x.pk3"
+		}
+		if (parts.length === 1) {
+			parts.unshift('base');
+		}
+		return parts.length === 2 ? parts.join('/') : null;
+	}
+
+	async function addFiles(fileList) {
+		const files = [...fileList].filter((file) => /\.pk3$/i.test(file.name));
+		if (!files.length) {
+			setStatus('No .pk3 files there.', true);
+			return;
+		}
+		let done = 0;
+		for (const file of files) {
+			const path = gamePathFor(file);
+			if (!path) {
+				continue;
+			}
+			setStatus(`Storing ${path} (${++done} of ${files.length})…`);
+			await store.add(path, file);
+		}
+		setStatus(`Added ${done} file${done === 1 ? '' : 's'}.`);
+		await refreshList();
+	}
+
+	async function refreshList() {
+		const files = await store.list();
+		const list = $('file-list');
+		list.textContent = '';
+		for (const entry of files) {
+			const item = document.createElement('li');
+			const name = document.createElement('span');
+			name.className = 'name';
+			name.textContent = entry.path;
+			const size = document.createElement('span');
+			size.className = 'size';
+			size.textContent = formatSize(entry.size);
+			const remove = document.createElement('button');
+			remove.textContent = 'Remove';
+			remove.onclick = async () => {
+				await store.remove(entry.path);
+				await refreshList();
+			};
+			item.append(name, size, remove);
+			list.append(item);
+		}
+		const total = files.reduce((sum, entry) => sum + entry.size, 0);
+		$('storage').textContent = files.length
+			? `${files.length} file${files.length === 1 ? '' : 's'}, ${formatSize(total)}. All of it is loaded into memory when the game starts.`
+			: 'No game data yet.';
+		updatePlayButton(files);
+		return files;
+	}
+
+	function updatePlayButton(files) {
+		const play = $('play');
+		if (!runtimeReady) {
+			play.textContent = 'Loading…';
+			play.disabled = true;
+			return;
+		}
+		play.textContent = 'Play';
+		play.disabled = started || !files.some((entry) => entry.path.startsWith('base/'));
+	}
+
+	//========================================================================
+	// Engine
+
+	let runtimeReady = false;
+	let syncTimer = null;
+
+	function syncHome() {
+		syncTimer = null;
+		FS.syncfs(false, (error) => {
+			if (error) {
+				log('Saving the home directory failed: ' + error);
+			}
+		});
+	}
+
+	async function start() {
+		started = true;
+		$('play').disabled = true;
+		const args = $('args').value.trim();
+		const relay = $('relay').value.trim();
+		saveSetting('args', args);
+		saveSetting('relay', relay);
+
+		try {
+			const files = await store.list();
+			let loaded = 0;
+			for (const entry of files) {
+				setStatus(`Loading ${entry.path} (${++loaded} of ${files.length})…`);
+				const data = new Uint8Array(await entry.file.arrayBuffer());
+				const path = `${gamePath}/${entry.path}`;
+				FS.mkdirTree(path.substring(0, path.lastIndexOf('/')));
+				FS.writeFile(path, data, { canOwn: true });
+			}
+
+			setStatus('Loading saved settings…');
+			FS.mkdirTree(homePath);
+			FS.mount(IDBFS, {}, homePath);
+			await new Promise((resolve) => FS.syncfs(true, (error) => {
+				if (error) {
+					log('Loading the home directory failed: ' + error);
+				}
+				resolve();
+			}));
+		} catch (error) {
+			setStatus('Loading the game data failed: ' + error, true);
+			return;
+		}
+
+		// render at the window's size (capped), scaled to fit by CSS
+		const scale = Math.min(window.devicePixelRatio || 1, 2);
+		const width = Math.min(Math.round(window.innerWidth * scale), 2560) & ~1;
+		const height = Math.min(Math.round(window.innerHeight * scale), 1440) & ~1;
+
+		// filled in place: the runtime took its reference to the array at load
+		Module.arguments.push(
+			'+set', 'fs_basepath', gamePath,
+			'+set', 'r_mode', '-1',
+			'+set', 'r_customwidth', String(width),
+			'+set', 'r_customheight', String(height),
+		);
+		if (isMultiplayer && relay) {
+			Module.arguments.push('+set', 'net_relay', relay);
+		}
+		Module.arguments.push(...splitArgs(args));
+
+		Module.ojkFileClosed = () => {
+			if (!syncTimer) {
+				syncTimer = setTimeout(syncHome, 1000);
+			}
+		};
+		addEventListener('pagehide', syncHome);
+
+		$('launcher').hidden = true;
+		$('game').hidden = false;
+		$('canvas').focus();
+		setStatus('');
+		Module.removeRunDependency('launcher');
+	}
+
+	function splitArgs(text) {
+		const args = [];
+		const re = /"([^"]*)"|(\S+)/g;
+		let match;
+		while ((match = re.exec(text))) {
+			args.push(match[1] !== undefined ? match[1] : match[2]);
+		}
+		return args;
+	}
+
+	window.Module = {
+		canvas: $('canvas'),
+		arguments: [],
+		print: log,
+		printErr: log,
+		preRun: [() => {
+			// hold main() until the player presses Play
+			Module.addRunDependency('launcher');
+			runtimeReady = true;
+			refreshList();
+		}],
+		setStatus: (text) => {
+			if (text && !runtimeReady) {
+				setStatus(text);
+			}
+		},
+		onAbort: (what) => {
+			$('log').hidden = false;
+			log('The game stopped: ' + what);
+		},
+	};
+
+	//========================================================================
+	// UI
+
+	$('args').value = loadSetting('args');
+	$('relay').value = loadSetting('relay');
+	$('add-files').onchange = (event) => addFiles(event.target.files);
+	$('add-folder').onchange = (event) => addFiles(event.target.files);
+	$('play').onclick = start;
+	$('fullscreen').onclick = () => Module.requestFullscreen(false, false);
+	$('show-log').onclick = () => {
+		$('log').hidden = !$('log').hidden;
+		log('');
+	};
+	$('canvas').addEventListener('click', () => {
+		if (document.pointerLockElement !== $('canvas')) {
+			$('canvas').requestPointerLock();
+		}
+	});
+
+	store.init().then(refreshList);
+})();
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

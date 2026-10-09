@@ -219,14 +219,26 @@ jobs:
         shell: bash
         run: cmake --build build -j $(nproc)
 
+      - name: Smoke test
+        shell: bash
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+          node tools/web/smoke-test.mjs build
+
       - uses: actions/upload-artifact@v4
         if: ${{ matrix.build_type == 'Release' }}
         with:
           name: OpenJK-web
           path: |
+            build/index.html
             build/openjk_sp.wasm32.html
             build/openjk_sp.wasm32.js
             build/openjk_sp.wasm32.wasm
+            build/openjk.wasm32.html
+            build/openjk.wasm32.js
+            build/openjk.wasm32.wasm
+            tools/web/server.js
           if-no-files-found: error
 
   macos:

@@ -48,6 +48,10 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include <windows.h>
 #endif
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 /*
 =============================================================================
 
@@ -989,6 +993,10 @@ void FS_FCloseFile( fileHandle_t f ) {
 	// we didn't find it as a pak, so close it as a unique file
 	if (fsh[f].handleFiles.file.o) {
 		fclose (fsh[f].handleFiles.file.o);
+#ifdef __EMSCRIPTEN__
+		// lets the hosting page persist written files (configs, saves)
+		EM_ASM( if (Module.ojkFileClosed) Module.ojkFileClosed(); );
+#endif
 	}
 	Com_Memset( &fsh[f], 0, sizeof( fsh[f] ) );
 }

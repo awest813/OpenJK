@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenJK</title>
+<style>
+	:root { --bg: #0d0f12; --panel: #171a20; --line: #2a2f38; --text: #e6e8eb; --muted: #9aa1ab; --accent: #4f9cf0; }
+	* { box-sizing: border-box; }
+	html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+	main { max-width: 720px; margin: 0 auto; padding: 32px 16px 48px; }
+	h1 { font-size: 28px; margin: 0 0 4px; }
+	p { margin: 0 0 12px; }
+	.muted { color: var(--muted); }
+	a.card { display: block; color: inherit; text-decoration: none; background: var(--panel); border: 1px solid var(--line);
+		border-radius: 8px; padding: 16px; margin: 16px 0; }
+	a.card:hover { border-color: var(--accent); }
+	a.card strong { display: block; font-size: 17px; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<main>
+	<h1>OpenJK</h1>
+	<p class="muted">Star Wars Jedi Knight: Jedi Academy in your browser. You need the game data from your own copy of the game.</p>
+	<a class="card" href="openjk_sp.wasm32.html">
+		<strong>Single player</strong>
+		<span class="muted">The Jedi Academy campaign.</span>
+	</a>
+	<a class="card" href="openjk.wasm32.html">
+		<strong>Multiplayer</strong>
+		<span class="muted">Play against bots, or join servers through this site's network relay.</span>
+	</a>
+	<p class="muted">Both share the game data you add, which stays in this browser.</p>
+</main>
+</body>
+</html>
