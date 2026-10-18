@@ -23,6 +23,9 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 // tr_surf.c
 #include "tr_local.h"
+#ifdef __EMSCRIPTEN__
+#include "webgl/webgl_flare.h"
+#endif
 
 /*
 
@@ -1687,10 +1690,6 @@ static bool RB_TestZFlare( vec3_t point) {
 	}
 
 //do test
-	float			depth = 0.0f;
-	bool			visible;
-	float			screenZ;
-
 	// read back the z buffer contents
 	if ( r_flares->integer !=1 ) {	//skipping the the z-test
 		return true;
@@ -1698,13 +1697,24 @@ static bool RB_TestZFlare( vec3_t point) {
 	// doing a readpixels is as good as doing a glFinish(), so
 	// don't bother with another sync
 	glState.finishCalled = qfalse;
+#ifdef __EMSCRIPTEN__
+	// WebGL cannot read depth. One point at the same 24-unit slack answers it.
+	return WebGL_FlareVisible(
+		(int)( backEnd.viewParms.viewportX + window[0] ),
+		(int)( backEnd.viewParms.viewportY + window[1] ),
+		eye[2],
+		backEnd.viewParms.projectionMatrix ) ? true : false;
+#else
+	float			depth = 0.0f;
+	float			screenZ;
+
 	qglReadPixels( backEnd.viewParms.viewportX + window[0],backEnd.viewParms.viewportY + window[1], 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &depth );
 
 	screenZ = backEnd.viewParms.projectionMatrix[14] /
 		( ( 2*depth - 1 ) * backEnd.viewParms.projectionMatrix[11] - backEnd.viewParms.projectionMatrix[10] );
 
-	visible = ( -eye[2] - -screenZ ) < 24;
-	return visible;
+	return ( -eye[2] - -screenZ ) < 24;
+#endif
 }
 
 void RB_SurfaceFlare( srfFlare_t *surf ) {

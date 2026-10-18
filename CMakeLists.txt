@@ -567,7 +567,8 @@ if(EMSCRIPTEN)
 	# tools/web/smoke-test.mjs
 	add_executable(qgl-fixed-test
 		"${CMAKE_SOURCE_DIR}/tools/web/qgl-fixed-test.cpp"
-		"${SharedDir}/webgl/qgl_fixed.cpp")
+		"${SharedDir}/webgl/qgl_fixed.cpp"
+		"${SharedDir}/webgl/webgl_flare.cpp")
 	target_include_directories(qgl-fixed-test PRIVATE "${SharedDir}")
 	target_link_libraries(qgl-fixed-test ${OpenJKWebVanillaLinkOptions})
 	set_target_properties(qgl-fixed-test PROPERTIES SUFFIX ".html")
