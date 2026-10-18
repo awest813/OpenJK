@@ -219,6 +219,10 @@ jobs:
         shell: bash
         run: cmake --build build -j $(nproc)
 
+      - name: Relay server test
+        shell: bash
+        run: node tools/web/server.test.mjs
+
       - name: Smoke test
         shell: bash
         run: |

@@ -54,6 +54,8 @@ typedef double GLclampd;
 #define GL_FOG_END 0x0B64
 #define GL_FOG_COLOR 0x0B66
 
+void glfTesting_LeaveVertexStream( int bytes );
+
 static const int width = 128, height = 64, cell = 16;
 static int failures, tests;
 
@@ -228,6 +230,71 @@ int main()
 	Quad( 32, 16, cell );
 	glDisable( GL_BLEND );
 
+	// row 1, 3: glTexCoord follows the client-active unit. Unit 0 is left at
+	// the black texel; a following glTexCoord on unit 1 must not move it.
+	{
+		const unsigned char pixels[8] = { 0, 0, 0, 255, 255, 255, 255, 255 };
+		GLuint texture;
+		glGenTextures( 1, &texture );
+		glfActiveTexture( GL_TEXTURE0 );
+		glBindTexture( GL_TEXTURE_2D, texture );
+		glfTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA8, 2, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels );
+		glfTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+		glfTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+		glfTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+		glfTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+		glfEnable( GL_TEXTURE_2D );
+		glfTexEnvf( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE );
+		glfDisableClientState( GL_VERTEX_ARRAY );
+		glfDisableClientState( GL_COLOR_ARRAY );
+		glfDisableClientState( GL_TEXTURE_COORD_ARRAY );
+		glfClientActiveTexture( GL_TEXTURE0 );
+		glfTexCoord2f( 0.25f, 0.5f );
+		glfClientActiveTexture( GL_TEXTURE1 );
+		glfTexCoord2f( 0.75f, 0.5f );
+		glfBegin( GL_QUADS );
+		glfVertex2f( 48, 16 );
+		glfVertex2f( 64, 16 );
+		glfVertex2f( 64, 32 );
+		glfVertex2f( 48, 32 );
+		glfEnd();
+		glfClientActiveTexture( GL_TEXTURE0 );
+		glfDisable( GL_TEXTURE_2D );
+	}
+
+	// row 1, 4: glDrawElements of a quad, which WebGL cannot draw directly
+	{
+		const float xyz[4][2] = { { 64, 16 }, { 80, 16 }, { 80, 32 }, { 64, 32 } };
+		const unsigned char colors[4][4] = {
+			{ 0, 255, 255, 255 }, { 0, 255, 255, 255 }, { 0, 255, 255, 255 }, { 0, 255, 255, 255 }
+		};
+		const unsigned short indices[4] = { 0, 1, 2, 3 };
+		glfEnableClientState( GL_VERTEX_ARRAY );
+		glfVertexPointer( 2, GL_FLOAT, 0, xyz );
+		glfEnableClientState( GL_COLOR_ARRAY );
+		glfColorPointer( 4, GL_UNSIGNED_BYTE, 0, colors );
+		glfDrawElements( GL_QUADS, 4, GL_UNSIGNED_SHORT, indices );
+		glfDisableClientState( GL_VERTEX_ARRAY );
+		glfDisableClientState( GL_COLOR_ARRAY );
+	}
+
+	// row 1, 5: two client arrays that don't fit in the room left in the
+	// stream. Reserving both up front keeps the position data.
+	{
+		const float xyz[4][2] = { { 80, 16 }, { 96, 16 }, { 96, 32 }, { 80, 32 } };
+		const unsigned char colors[4][4] = {
+			{ 255, 0, 255, 255 }, { 255, 0, 255, 255 }, { 255, 0, 255, 255 }, { 255, 0, 255, 255 }
+		};
+		glfTesting_LeaveVertexStream( 40 );
+		glfEnableClientState( GL_VERTEX_ARRAY );
+		glfVertexPointer( 2, GL_FLOAT, 0, xyz );
+		glfEnableClientState( GL_COLOR_ARRAY );
+		glfColorPointer( 4, GL_UNSIGNED_BYTE, 0, colors );
+		glfDrawArrays( GL_QUADS, 0, 4 );
+		glfDisableClientState( GL_VERTEX_ARRAY );
+		glfDisableClientState( GL_COLOR_ARRAY );
+	}
+
 	Expect( "constant colour", 0, 0, 255, 0, 0 );
 	Expect( "GL_MODULATE", 1, 0, 0, 128, 0 );
 	Expect( "GL_REPLACE", 2, 0, 0, 255, 0 );
@@ -249,6 +316,9 @@ int main()
 	}
 	Expect( "multitexture GL_ADD", 1, 1, 255, 128, 0 );
 	Expect( "blending", 2, 1, 128, 128, 128 );
+	Expect( "texcoord client unit", 3, 1, 0, 0, 0 );
+	Expect( "draw elements quads", 4, 1, 0, 255, 255 );
+	Expect( "stream reserve", 5, 1, 255, 0, 255 );
 
 	printf( "qgl_fixed: %d of %d tests passed\n", tests - failures, tests );
 	return 0;

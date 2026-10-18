@@ -41,7 +41,8 @@ this environment's proxy).
 Players add the `.pk3` files of their own copy of the game on the launcher
 page; they are stored in the browser (OPFS) and loaded into memory on
 Play, so a full install needs ~1.5 GB of RAM. Configs and saves live in
-IndexedDB.
+IndexedDB. The mouse is captured only while the game asks for mouselook
+(a request that isn't a click shows a button, and menus are not covered).
 
 ### How it works
 
@@ -71,8 +72,9 @@ IndexedDB.
 - **Console**: `con_passive.cpp`, never stdin (Emscripten would open
   `window.prompt()` dialogs).
 - **Files**: `shared/web/shell.html` is the launcher and Emscripten shell
-  for all clients; `FS_FCloseFile` tells it to sync the home directory to
-  IndexedDB after writes.
+  for all clients. Closing a file that was opened for writing, or renaming
+  or deleting one, tells the page to sync the home directory to IndexedDB.
+  Reads do not.
 - **Networking** (MP): `codemp/qcommon/net_web.cpp` replaces `net_ip.cpp`.
   Datagrams go over one WebSocket to `tools/web/server.js`, which sends
   them on as UDP; host names get placeholder addresses the relay

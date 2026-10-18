@@ -47,8 +47,9 @@
 		</a>
 	</div>
 	<p class="muted small" style="margin-top: 14px">Also available: <a href="openjk_rend2.wasm32.html">multiplayer with the
-		rend2 renderer</a> (experimental; needs WebGL 2).</p>
+		rend2 renderer</a> (experimental).</p>
 	<p id="data">You'll add the game data from your copy of Jedi Academy on the next page. Both modes share it.</p>
+	<p class="muted small" id="webgl" hidden></p>
 	<p class="footer muted small">OpenJK is open source and not affiliated with Raven Software, Activision or Lucasfilm.
 		Game data stays in this browser and is never uploaded.</p>
 </main>
@@ -75,10 +76,23 @@
 		if (count) {
 			const data = document.getElementById('data');
 			data.className = 'ok';
-			data.textContent = `Your game data is ready: ${count} file${count === 1 ? '' : 's'}, ${(size / (1 << 30)).toFixed(2)} GB stored in this browser.`;
+			const sizeText = size >= 1 << 30 ? `${(size / (1 << 30)).toFixed(2)} GB`
+				: size >= 1 << 20 ? `${(size / (1 << 20)).toFixed(1)} MB`
+				: `${Math.max(1, Math.ceil(size / 1024))} KB`;
+			data.textContent = `Your game data is ready: ${count} file${count === 1 ? '' : 's'}, ${sizeText} stored in this browser.`;
 		}
 	} catch (e) {
 		// nothing stored yet, or no OPFS
+	}
+	try {
+		const canvas = document.createElement('canvas');
+		if (!canvas.getContext('webgl2')) {
+			const webgl = document.getElementById('webgl');
+			webgl.hidden = false;
+			webgl.textContent = 'This browser has no WebGL 2, which the game needs.';
+		}
+	} catch (e) {
+		// the game pages report this too
 	}
 })();
 </script>

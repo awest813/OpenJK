@@ -58,6 +58,19 @@ const USAGE = `usage: node server.js [options]
   --verbose           log every relay connection
 `;
 
+function parseIntOption(arg, raw, min, max) {
+	if (!/^\d+$/.test(raw)) {
+		console.error(`${arg} needs an integer\n\n${USAGE}`);
+		process.exit(1);
+	}
+	const n = Number(raw);
+	if (n < min || n > max) {
+		console.error(`${arg} must be from ${min} to ${max}\n\n${USAGE}`);
+		process.exit(1);
+	}
+	return n;
+}
+
 function parseArgs(argv) {
 	const options = {
 		root: process.cwd(), port: 8080, host: undefined, serveStatic: true,
@@ -75,19 +88,23 @@ function parseArgs(argv) {
 		};
 		switch (arg) {
 			case '--root': options.root = path.resolve(value()); break;
-			case '--port': options.port = parseInt(value(), 10); break;
+			case '--port': options.port = parseIntOption(arg, value(), 0, 65535); break;
 			case '--host': options.host = value(); break;
 			case '--no-static': options.serveStatic = false; break;
 			case '--allow': options.allow.push(value()); break;
 			case '--allow-private': options.allowPrivate = true; break;
-			case '--min-port': options.minPort = parseInt(value(), 10); break;
-			case '--max-port': options.maxPort = parseInt(value(), 10); break;
-			case '--max-clients': options.maxClients = parseInt(value(), 10); break;
-			case '--rate': options.rate = parseInt(value(), 10); break;
+			case '--min-port': options.minPort = parseIntOption(arg, value(), 0, 65535); break;
+			case '--max-port': options.maxPort = parseIntOption(arg, value(), 0, 65535); break;
+			case '--max-clients': options.maxClients = parseIntOption(arg, value(), 1, 100000); break;
+			case '--rate': options.rate = parseIntOption(arg, value(), 1, 1000000); break;
 			case '--verbose': options.verbose = true; break;
 			case '-h': case '--help': console.log(USAGE); process.exit(0);
 			default: console.error(`unknown option ${arg}\n\n${USAGE}`); process.exit(1);
 		}
+	}
+	if (options.minPort > options.maxPort) {
+		console.error(`--min-port ${options.minPort} is above --max-port ${options.maxPort}\n\n${USAGE}`);
+		process.exit(1);
 	}
 	return options;
 }
@@ -110,11 +127,29 @@ function isPrivateAddress(ip) {
 // "ip:port" (port optional) entries from --allow, filled in at startup
 const allowList = [];
 
+function originAllowed(request) {
+	const origin = request.headers.origin;
+	if (!origin) {
+		return true; // non-browser clients don't send one
+	}
+	let url;
+	try {
+		url = new URL(origin);
+	} catch (error) {
+		return false;
+	}
+	return url.host === request.headers.host;
+}
+
 async function resolveAllowList() {
 	for (const entry of options.allow) {
-		const match = /^(.*?)(?::(\d+))?$/.exec(entry);
-		const host = match[1];
-		const port = match[2] ? parseInt(match[2], 10) : null;
+		const match = /^(.*):(\d+)$/.exec(entry);
+		const host = match ? match[1] : entry;
+		const port = match ? Number(match[2]) : null;
+		if (!host || (port !== null && (port < 1 || port > 65535))) {
+			console.error(`invalid --allow entry ${entry}`);
+			process.exit(1);
+		}
 		const { address } = await dns.promises.lookup(host, { family: 4 });
 		allowList.push({ ip: address, port });
 		console.log(`relaying to ${host} (${address})${port ? ':' + port : ''}`);
@@ -159,6 +194,7 @@ class RelayClient {
 
 		this.ws.onMessage = (data) => this.onMessage(data);
 		this.ws.onClose = () => this.close();
+		this.ping = setInterval(() => this.ws.sendFrame(0x9, Buffer.alloc(0)), 25000);
 
 		relayClients++;
 		if (options.verbose) {
@@ -172,6 +208,7 @@ class RelayClient {
 		}
 		this.closed = true;
 		relayClients--;
+		clearInterval(this.ping);
 		this.udp.close();
 		if (options.verbose) {
 			console.log(`relay: ${this.remote} disconnected`);
@@ -278,6 +315,7 @@ class WebSocketConnection {
 		this.socket = socket;
 		this.buffer = Buffer.alloc(0);
 		this.fragments = [];
+		this.fragmentBytes = 0;
 		this.onMessage = () => {};
 		this.onClose = () => {};
 		socket.setNoDelay(true);
@@ -333,10 +371,20 @@ class WebSocketConnection {
 			case 0x0: // continuation
 			case 0x1: // text
 			case 0x2: // binary
+				if ((opcode === 0 && !this.fragments.length) || (opcode !== 0 && this.fragments.length)) {
+					this.socket.destroy();
+					return;
+				}
+				this.fragmentBytes += payload.length;
+				if (this.fragmentBytes > (1 << 20)) {
+					this.socket.destroy();
+					return;
+				}
 				this.fragments.push(payload);
 				if (fin) {
 					const message = Buffer.concat(this.fragments);
 					this.fragments = [];
+					this.fragmentBytes = 0;
 					this.onMessage(message);
 				}
 				break;
@@ -441,16 +489,28 @@ function serveStatic(request, response) {
 			response.end('not found');
 			return;
 		}
-		response.writeHead(200, {
+		const etag = `"${Math.floor(stat.mtimeMs)}-${stat.size}"`;
+		const headers = {
 			'Content-Type': MIME_TYPES[path.extname(file)] || 'application/octet-stream',
 			'Content-Length': stat.size,
 			'Cache-Control': 'no-cache',
-		});
+			ETag: etag,
+		};
+		if (request.headers['if-none-match'] === etag) {
+			response.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' });
+			response.end();
+			return;
+		}
+		response.writeHead(200, headers);
 		if (request.method === 'HEAD') {
 			response.end();
 			return;
 		}
-		fs.createReadStream(file).pipe(response);
+		const stream = fs.createReadStream(file);
+		stream.on('error', () => {
+			response.destroy();
+		});
+		stream.pipe(response);
 	});
 }
 
@@ -461,9 +521,19 @@ async function main() {
 
 	const server = http.createServer(serveStatic);
 	server.on('upgrade', (request, socket) => {
-		const urlPath = new URL(request.url, 'http://localhost').pathname;
+		let urlPath;
+		try {
+			urlPath = new URL(request.url, 'http://localhost').pathname;
+		} catch (error) {
+			socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+			return;
+		}
 		if (urlPath !== '/relay') {
 			socket.end('HTTP/1.1 404 Not Found\r\n\r\n');
+			return;
+		}
+		if (!originAllowed(request)) {
+			socket.end('HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\n\r\ncross-origin relay connections are refused\r\n');
 			return;
 		}
 		if (relayClients >= options.maxClients) {
@@ -474,8 +544,13 @@ async function main() {
 			new RelayClient(socket, `${request.socket.remoteAddress}:${request.socket.remotePort}`);
 		}
 	});
+	server.on('error', (error) => {
+		console.error(error.message);
+		process.exit(1);
+	});
 	server.listen(options.port, options.host, () => {
-		const where = `${options.host || 'localhost'}:${options.port}`;
+		const addr = server.address();
+		const where = `${options.host || 'localhost'}:${addr.port}`;
 		if (options.serveStatic) {
 			console.log(`serving ${options.root} on http://${where}/`);
 		}

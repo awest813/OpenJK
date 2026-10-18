@@ -270,6 +270,7 @@ typedef struct qfile_us {
 typedef struct fileHandleData_s {
 	qfile_ut	handleFiles;
 	qboolean	handleSync;
+	qboolean	openedForWrite;
 	int			fileSize;
 	int			zipFilePos;
 	int			zipFileLen;
@@ -599,6 +600,15 @@ static void FS_CheckFilenameIsMutable( const char *filename, const char *functio
 	}
 }
 
+// The web page persists the home directory when this runs. Reads must not
+// call it: syncing IndexedDB on every open file stalls map loads.
+static void FS_WebNoteMutation( void )
+{
+#ifdef __EMSCRIPTEN__
+	EM_ASM( if (Module.ojkFileClosed) Module.ojkFileClosed(); );
+#endif
+}
+
 /*
 =================
 FS_CopyFile
@@ -663,6 +673,7 @@ void FS_CopyFile( char *fromOSPath, char *toOSPath ) {
 	}
 	fclose( f );
 	free( buf );
+	FS_WebNoteMutation();
 }
 
 /*
@@ -675,6 +686,7 @@ void FS_Remove( const char *osPath ) {
 	FS_CheckFilenameIsMutable( osPath, __func__ );
 
 	remove( osPath );
+	FS_WebNoteMutation();
 }
 
 /*
@@ -688,6 +700,7 @@ void FS_HomeRemove( const char *homePath ) {
 
 	remove( FS_BuildOSPath( fs_homepath->string,
 			fs_gamedir, homePath ) );
+	FS_WebNoteMutation();
 }
 
 /*
@@ -724,6 +737,7 @@ void FS_Rmdir( const char *osPath, qboolean recursive ) {
 	}
 
 	rmdir( osPath );
+	FS_WebNoteMutation();
 }
 
 /*
@@ -828,6 +842,7 @@ fileHandle_t FS_SV_FOpenFileWrite( const char *filename ) {
 	Q_strncpyz( fsh[f].name, filename, sizeof( fsh[f].name ) );
 
 	fsh[f].handleSync = qfalse;
+	fsh[f].openedForWrite = qtrue;
 	if (!fsh[f].handleFiles.file.o) {
 		f = 0;
 	}
@@ -866,6 +881,7 @@ fileHandle_t FS_SV_FOpenFileAppend( const char *filename ) {
 
 	fsh[f].handleFiles.file.o = fopen( ospath, "ab" );
 	fsh[f].handleSync = qfalse;
+	fsh[f].openedForWrite = qtrue;
 
 	if (!fsh[f].handleFiles.file.o) {
 		f = 0;
@@ -988,6 +1004,8 @@ void FS_SV_Rename( const char *from, const char *to, qboolean safe ) {
 		// Failed, try copying it and deleting the original
 		FS_CopyFile ( from_ospath, to_ospath );
 		FS_Remove ( from_ospath );
+	} else {
+		FS_WebNoteMutation();
 	}
 }
 
@@ -1018,6 +1036,8 @@ void FS_Rename( const char *from, const char *to ) {
 		// Failed, try copying it and deleting the original
 		FS_CopyFile ( from_ospath, to_ospath );
 		FS_Remove ( from_ospath );
+	} else {
+		FS_WebNoteMutation();
 	}
 }
 
@@ -1054,11 +1074,10 @@ void FS_FCloseFile( fileHandle_t f ) {
 
 	// we didn't find it as a pak, so close it as a unique file
 	if (fsh[f].handleFiles.file.o) {
+		const qboolean write = fsh[f].openedForWrite;
 		fclose (fsh[f].handleFiles.file.o);
-#ifdef __EMSCRIPTEN__
-		// lets the hosting page persist written files (configs, saves)
-		EM_ASM( if (Module.ojkFileClosed) Module.ojkFileClosed(); );
-#endif
+		if ( write )
+			FS_WebNoteMutation();
 	}
 	Com_Memset( &fsh[f], 0, sizeof( fsh[f] ) );
 }
@@ -1100,6 +1119,7 @@ fileHandle_t FS_FOpenFileWrite( const char *filename, qboolean safe ) {
 	Q_strncpyz( fsh[f].name, filename, sizeof( fsh[f].name ) );
 
 	fsh[f].handleSync = qfalse;
+	fsh[f].openedForWrite = qtrue;
 	if (!fsh[f].handleFiles.file.o) {
 		f = 0;
 	}
@@ -1140,6 +1160,7 @@ fileHandle_t FS_FOpenFileAppend( const char *filename ) {
 
 	fsh[f].handleFiles.file.o = fopen( ospath, "ab" );
 	fsh[f].handleSync = qfalse;
+	fsh[f].openedForWrite = qtrue;
 	if (!fsh[f].handleFiles.file.o) {
 		f = 0;
 	}

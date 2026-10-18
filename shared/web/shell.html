@@ -118,8 +118,10 @@ IndexedDB.
 		border-radius: var(--radius); padding: 22px; text-align: center; }
 	.overlay h2 { justify-content: center; font-size: 18px; margin-bottom: 8px; }
 	#loading { background: var(--bg); }
-	#capture { background: rgba(0, 0, 0, .45); cursor: pointer; }
-	#capture .card { pointer-events: none; }
+	#capture { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 2;
+		max-width: calc(100% - 32px); }
+	#capture button { background: rgba(21, 24, 29, .94); border-color: var(--accent);
+		box-shadow: 0 8px 24px rgba(0, 0, 0, .35); }
 	#error { background: rgba(0, 0, 0, .75); z-index: 3; }
 	#error .card { text-align: left; }
 	#error .buttons { display: flex; gap: 8px; margin-top: 14px; }
@@ -193,7 +195,7 @@ IndexedDB.
 	</section>
 
 	<p class="footer">OpenJK is open source and not affiliated with Raven Software, Activision or Lucasfilm.
-		Click the game to capture the mouse, and press Esc to release it.</p>
+		Menus use the normal cursor. In game, click to capture the mouse, and press Esc to release it.</p>
 </div>
 
 <div id="loading" class="overlay" hidden>
@@ -208,11 +210,8 @@ IndexedDB.
 
 <div id="game" hidden>
 	<canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
-	<div id="capture" class="overlay" hidden>
-		<div class="card">
-			<h2>Click to play</h2>
-			<p class="muted small" style="margin: 0">The game takes over the mouse. Press Esc to get it back.</p>
-		</div>
+	<div id="capture" hidden>
+		<button type="button" id="capture-button">Click to capture the mouse</button>
 	</div>
 	<div id="game-bar">
 		<button id="fullscreen" title="Fullscreen">Fullscreen</button>
@@ -248,6 +247,19 @@ IndexedDB.
 	let busy = false;
 	let started = false;
 	let storedFiles = [];
+	let pointerLockWanted = false;
+	let captureTimer = null;
+
+	function hasWebGL2() {
+		try {
+			const canvas = document.createElement('canvas');
+			return !!canvas.getContext('webgl2');
+		} catch (e) {
+			return false;
+		}
+	}
+	const webgl2 = hasWebGL2();
+	const engineScript = document.getElementById('engine-script').content.querySelector('script');
 
 	$('mode').textContent = isMultiplayer ? 'Multiplayer' : 'Single player';
 	$('switch-mode').textContent = isMultiplayer ? 'Switch to single player' : 'Switch to multiplayer';
@@ -384,7 +396,7 @@ IndexedDB.
 				for await (const [name, handle] of dir.entries()) {
 					if (handle.kind === 'directory') {
 						await walk(handle, prefix + name + '/');
-					} else {
+					} else if (!name.startsWith('.')) {
 						const file = await handle.getFile();
 						files.push({ path: prefix + name, size: file.size, file });
 					}
@@ -474,7 +486,9 @@ IndexedDB.
 				done += file.size;
 				stored++;
 			}
-			setStatus(`Added ${plural(stored, 'file')}${skipped ? `, ${skipped} already stored` : ''}.`);
+			setStatus(!stored && skipped
+				? `${plural(skipped, 'file')} already stored.`
+				: `Added ${plural(stored, 'file')}${skipped ? `, ${skipped} already stored` : ''}.`);
 		} catch (error) {
 			const full = error && error.name === 'QuotaExceededError';
 			setStatus(full
@@ -552,10 +566,16 @@ IndexedDB.
 		const play = $('play');
 		const hint = $('play-hint');
 		const hasBase = storedFiles.some((entry) => entry.path.startsWith('base/'));
-		play.textContent = runtimeReady ? 'Play' : 'Starting the engine…';
-		play.disabled = !runtimeReady || busy || started || !hasBase;
+		play.textContent = runtimeReady || !engineScript ? 'Play' : 'Starting the engine…';
+		play.disabled = !engineScript || !webgl2 || !runtimeReady || busy || started || !hasBase;
 		hint.classList.remove('error');
-		if (!runtimeReady) {
+		if (!engineScript) {
+			hint.textContent = 'This page was opened without a game engine build.';
+			hint.classList.add('error');
+		} else if (!webgl2) {
+			hint.textContent = 'This browser has no WebGL 2, which the game needs.';
+			hint.classList.add('error');
+		} else if (!runtimeReady) {
 			hint.textContent = 'Downloading the game engine…';
 		} else if (busy) {
 			hint.textContent = 'Wait for the files to be stored.';
@@ -588,6 +608,7 @@ IndexedDB.
 		if (document.pointerLockElement) {
 			document.exitPointerLock();
 		}
+		updateCapture();
 	}
 
 	async function start() {
@@ -660,8 +681,8 @@ IndexedDB.
 
 		$('loading').hidden = true;
 		$('game').hidden = false;
-		$('capture').hidden = false;
 		$('canvas').focus();
+		updateCapture();
 		Module.removeRunDependency('launcher');
 	}
 
@@ -720,32 +741,108 @@ IndexedDB.
 
 	const drop = $('drop');
 	let dragDepth = 0;
-	drop.addEventListener('dragenter', (event) => { event.preventDefault(); dragDepth++; drop.classList.add('over'); });
-	drop.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; drop.classList.remove('over'); } });
-	drop.addEventListener('dragover', (event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; });
-	drop.addEventListener('drop', async (event) => {
+	addEventListener('dragenter', (event) => {
+		if ($('launcher').hidden) return;
+		event.preventDefault();
+		dragDepth++;
+		drop.classList.add('over');
+	});
+	addEventListener('dragleave', () => {
+		if (--dragDepth <= 0) {
+			dragDepth = 0;
+			drop.classList.remove('over');
+		}
+	});
+	addEventListener('dragover', (event) => {
+		event.preventDefault();
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+	});
+	// anywhere on the launcher, not only the dashed box; a drop must not navigate away
+	addEventListener('drop', async (event) => {
 		event.preventDefault();
 		dragDepth = 0;
 		drop.classList.remove('over');
-		addFiles(await filesFromDrop(event.dataTransfer));
+		if (!$('launcher').hidden) {
+			addFiles(await filesFromDrop(event.dataTransfer));
+		}
 	});
-	// a file dropped next to the drop zone shouldn't navigate away
-	addEventListener('dragover', (event) => event.preventDefault());
-	addEventListener('drop', (event) => event.preventDefault());
 
 	$('play').onclick = start;
 	$('fullscreen').onclick = () => Module.requestFullscreen(false, false);
-	$('show-log').onclick = () => ($('log').hidden ? showLog() : ($('log').hidden = true));
-	$('error-log').onclick = showLog;
-	$('capture').onclick = () => $('canvas').requestPointerLock();
-	$('canvas').addEventListener('click', () => {
-		if (document.pointerLockElement !== $('canvas')) {
-			$('canvas').requestPointerLock();
+	$('show-log').onclick = () => {
+		if ($('log').hidden) {
+			showLog();
+		} else {
+			$('log').hidden = true;
 		}
-	});
-	document.addEventListener('pointerlockchange', () => {
-		if (started && $('error').hidden) {
-			$('capture').hidden = document.pointerLockElement === $('canvas');
+		$('show-log').textContent = $('log').hidden ? 'Log' : 'Hide log';
+	};
+	$('error-log').onclick = showLog;
+
+	// Pointer lock follows the engine. SDL asks for it when the game wants
+	// mouselook and releases it for menus; locking on every click would take
+	// the cursor away from those menus. A request from the game loop is not a
+	// user gesture, so it can fail — then the button below locks on click.
+	function resumeAudio() {
+		const contexts = [];
+		const sdl = (typeof Module !== 'undefined' && Module.SDL2) || (typeof SDL2 !== 'undefined' && SDL2);
+		if (sdl && sdl.audioContext) {
+			contexts.push(sdl.audioContext);
+		}
+		if (typeof AL !== 'undefined' && AL.currentCtx && AL.currentCtx.audioCtx) {
+			contexts.push(AL.currentCtx.audioCtx);
+		}
+		for (const ctx of contexts) {
+			if (ctx.state === 'suspended' && ctx.resume) {
+				ctx.resume();
+			}
+		}
+	}
+
+	function updateCapture() {
+		clearTimeout(captureTimer);
+		const show = started && pointerLockWanted && $('error').hidden
+			&& document.pointerLockElement !== $('canvas');
+		if (!show) {
+			$('capture').hidden = true;
+			return;
+		}
+		// Esc unlocks the pointer before the game opens the menu and releases
+		// the mouse. Wait so that doesn't flash the button.
+		captureTimer = setTimeout(() => {
+			$('capture').hidden = !(started && pointerLockWanted && $('error').hidden
+				&& document.pointerLockElement !== $('canvas'));
+		}, 250);
+	}
+
+	const requestPointerLock = HTMLCanvasElement.prototype.requestPointerLock;
+	HTMLCanvasElement.prototype.requestPointerLock = function () {
+		if (this === $('canvas')) {
+			pointerLockWanted = true;
+			updateCapture();
+		}
+		const result = requestPointerLock.apply(this, arguments);
+		if (this === $('canvas') && result && typeof result.catch === 'function') {
+			result.catch(() => updateCapture());
+		}
+		return result;
+	};
+	const exitPointerLock = Document.prototype.exitPointerLock;
+	Document.prototype.exitPointerLock = function () {
+		pointerLockWanted = false;
+		updateCapture();
+		return exitPointerLock.apply(this, arguments);
+	};
+	document.addEventListener('pointerlockchange', updateCapture);
+	document.addEventListener('pointerlockerror', updateCapture);
+	$('capture-button').onclick = () => {
+		resumeAudio();
+		requestPointerLock.call($('canvas'));
+	};
+	$('canvas').addEventListener('mousedown', () => {
+		resumeAudio();
+		if (pointerLockWanted && document.pointerLockElement !== $('canvas')) {
+			requestPointerLock.call($('canvas'));
 		}
 	});
 
@@ -755,13 +852,16 @@ IndexedDB.
 	// Every client is also built with JSPI (*.jspi.js), which lets the loading
 	// screen update during map loads; use that build where the browser
 	// supports it (?jspi=0 forces the other one).
-	const engineScript = document.getElementById('engine-script').content.querySelector('script');
-	const script = document.createElement('script');
-	const useJspi = typeof WebAssembly.Suspending === 'function'
-		&& new URLSearchParams(location.search).get('jspi') !== '0';
-	script.src = useJspi ? engineScript.getAttribute('src').replace(/\.js$/, '.jspi.js') : engineScript.getAttribute('src');
-	script.async = true;
-	document.body.append(script);
+	if (!engineScript) {
+		updatePlayButton();
+	} else {
+		const script = document.createElement('script');
+		const useJspi = typeof WebAssembly.Suspending === 'function'
+			&& new URLSearchParams(location.search).get('jspi') !== '0';
+		script.src = useJspi ? engineScript.getAttribute('src').replace(/\.js$/, '.jspi.js') : engineScript.getAttribute('src');
+		script.async = true;
+		document.body.append(script);
+	}
 })();
 </script>
 </body>
