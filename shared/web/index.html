@@ -63,10 +63,10 @@
 		let count = 0;
 		let size = 0;
 		const walk = async (handle) => {
-			for await (const [, child] of handle.entries()) {
+			for await (const [name, child] of handle.entries()) {
 				if (child.kind === 'directory') {
 					await walk(child);
-				} else {
+				} else if (!name.startsWith('.')) {
 					count++;
 					size += (await child.getFile()).size;
 				}

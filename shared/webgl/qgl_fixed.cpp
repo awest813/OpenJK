@@ -87,6 +87,7 @@ typedef double GLclampd;
 #define GL_MAX_TEXTURE_UNITS	0x84E2
 #define GL_TEXTURE_MAX_ANISOTROPY	0x84FE
 #define GL_DOUBLE_				0x140A
+#define GL_STENCIL_INDEX_		0x1901
 
 #define NUM_TEXTURE_UNITS	2
 #define MAX_STACK_DEPTH		32
@@ -1424,12 +1425,66 @@ void glfTexParameterfv( GLenum target, GLenum pname, const GLfloat *params )
 	// only border colours, which WebGL doesn't have
 }
 
+// The part of a copy rectangle that lies inside the default framebuffer.
+// WebGL rejects a copy that leaves the canvas, and the single-player renderer
+// treats any GL error as fatal, so an off-screen distortion or shadow copy
+// would end the game. Returns false when nothing overlaps the canvas.
+static bool ClipToDrawingBuffer( GLint *x, GLint *y, GLsizei *width, GLsizei *height )
+{
+	if ( *width <= 0 || *height <= 0 )
+		return false;
+
+	int fbWidth = 0;
+	int fbHeight = 0;
+	emscripten_webgl_get_drawing_buffer_size( emscripten_webgl_get_current_context(), &fbWidth, &fbHeight );
+	if ( fbWidth <= 0 || fbHeight <= 0 )
+		return false;
+
+	if ( *x < 0 )
+	{
+		*width += *x;
+		*x = 0;
+	}
+	if ( *y < 0 )
+	{
+		*height += *y;
+		*y = 0;
+	}
+	if ( *width <= 0 || *height <= 0 || *x >= fbWidth || *y >= fbHeight )
+		return false;
+	if ( *x + *width > fbWidth )
+		*width = fbWidth - *x;
+	if ( *y + *height > fbHeight )
+		*height = fbHeight - *y;
+	return *width > 0 && *height > 0;
+}
+
 void glfCopyTexImage2D( GLenum target, GLint level, GLenum internalformat, GLint x, GLint y,
 	GLsizei width, GLsizei height, GLint border )
 {
-	if ( !IsWebGLTextureTarget( target ) )
+	if ( !IsWebGLTextureTarget( target ) || width <= 0 || height <= 0 )
 		return;
+
 	// the internal format has to match the framebuffer's
+	GLint framebuffer = 0;
+	glGetIntegerv( GL_READ_FRAMEBUFFER_BINDING, &framebuffer );
+	GLint srcX = x;
+	GLint srcY = y;
+	GLsizei srcWidth = width;
+	GLsizei srcHeight = height;
+	const bool clipped = framebuffer || ClipToDrawingBuffer( &srcX, &srcY, &srcWidth, &srcHeight );
+	if ( !clipped )
+	{
+		glTexImage2D( target, level, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL );
+		return;
+	}
+	if ( !framebuffer && ( srcX != x || srcY != y || srcWidth != width || srcHeight != height ) )
+	{
+		// keep the size the renderer asked for; only the on-screen part is copied
+		glTexImage2D( target, level, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL );
+		glCopyTexSubImage2D( target, level, srcX - x, srcY - y, srcX, srcY, srcWidth, srcHeight );
+		return;
+	}
 	glCopyTexImage2D( target, level, GL_RGBA, x, y, width, height, 0 );
 }
 
@@ -1438,11 +1493,30 @@ void glfCopyTexSubImage2D( GLenum target, GLint level, GLint xoffset, GLint yoff
 {
 	if ( !IsWebGLTextureTarget( target ) )
 		return;
+
+	GLint framebuffer = 0;
+	glGetIntegerv( GL_READ_FRAMEBUFFER_BINDING, &framebuffer );
+	if ( !framebuffer )
+	{
+		const GLint srcX = x;
+		const GLint srcY = y;
+		if ( !ClipToDrawingBuffer( &x, &y, &width, &height ) )
+			return;
+		xoffset += x - srcX;
+		yoffset += y - srcY;
+	}
 	glCopyTexSubImage2D( target, level, xoffset, yoffset, x, y, width, height );
 }
 
 void glfReadPixels( GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLvoid *pixels )
 {
+	if ( format == GL_STENCIL_INDEX_ )
+	{
+		// WebGL can't read the stencil buffer
+		memset( pixels, 0, (size_t)width * height * TypeSize( type ) );
+		return;
+	}
+
 	if ( format == GL_DEPTH_COMPONENT )
 	{
 		// WebGL can't read the depth buffer: report everything as far away
@@ -1501,6 +1575,19 @@ void glfGetIntegerv( GLenum pname, GLint *params )
 void glfGetFloatv( GLenum pname, GLfloat *params ) { glGetFloatv( pname, params ); }
 void glfClearDepth( GLclampd depth ) { glClearDepthf( (GLfloat)depth ); }
 void glfDepthRange( GLclampd zNear, GLclampd zFar ) { glDepthRangef( (GLfloat)zNear, (GLfloat)zFar ); }
+
+void glfLineWidth( GLfloat width )
+{
+	// WebGL's line width range is often just 1. A wider line is an error, and
+	// the single-player renderer turns any GL error into a fatal shutdown.
+	GLfloat range[2] = { 1.0f, 1.0f };
+	glGetFloatv( GL_ALIASED_LINE_WIDTH_RANGE, range );
+	if ( width < range[0] )
+		width = range[0];
+	else if ( width > range[1] )
+		width = range[1];
+	glLineWidth( width );
+}
 
 void glfDrawBuffer( GLenum mode )
 {

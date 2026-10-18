@@ -43,6 +43,8 @@ page; they are stored in the browser (OPFS) and loaded into memory on
 Play, so a full install needs ~1.5 GB of RAM. Configs and saves live in
 IndexedDB. The mouse is captured only while the game asks for mouselook
 (a request that isn't a click shows a button, and menus are not covered).
+The canvas keeps the picture's aspect ratio, so the cursor lines up when
+the window is a different shape. A folder named `Base` is stored as `base`.
 
 ### How it works
 

@@ -111,8 +111,10 @@ IndexedDB.
 	.footer { margin-top: 28px; font-size: 13px; color: var(--muted); }
 
 	/* game, loading and error screens */
-	#game { position: fixed; inset: 0; background: #000; }
-	#canvas { display: block; width: 100%; height: 100%; object-fit: contain; outline: none; }
+	#game { position: fixed; inset: 0; background: #000; display: grid; place-items: center; overflow: hidden; }
+	/* sized to the picture's aspect (see fitCanvas); stretching the bitmap to the
+	   window would put the mouse in the wrong place wherever the aspects differ */
+	#canvas { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; outline: none; }
 	.overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; }
 	.overlay .card { max-width: 440px; width: 100%; background: rgba(21, 24, 29, .94); border: 1px solid var(--line);
 		border-radius: var(--radius); padding: 22px; text-align: center; }
@@ -420,6 +422,10 @@ IndexedDB.
 		if (parts.length === 1) {
 			parts.unshift('base');
 		}
+		// the engine's directory is "base", and the comparison is case sensitive
+		if (parts.length === 2 && parts[0].toLowerCase() === 'base') {
+			parts[0] = 'base';
+		}
 		return parts.length === 2 ? parts.join('/') : null;
 	}
 
@@ -537,7 +543,9 @@ IndexedDB.
 
 		// the retail game ships assets0-3.pk3 in base
 		const check = $('assets-check');
-		const names = new Set(storedFiles.filter((e) => e.path.startsWith('base/')).map((e) => e.path.substring(5).toLowerCase()));
+		const names = new Set(storedFiles
+			.filter((e) => e.path.toLowerCase().startsWith('base/'))
+			.map((e) => e.path.substring(e.path.indexOf('/') + 1).toLowerCase()));
 		const missing = requiredAssets.filter((name) => !names.has(name));
 		check.hidden = !storedFiles.length;
 		check.className = 'check ' + (!missing.length ? 'ok' : missing.length < requiredAssets.length ? 'warn' : 'bad');
@@ -565,7 +573,7 @@ IndexedDB.
 	function updatePlayButton() {
 		const play = $('play');
 		const hint = $('play-hint');
-		const hasBase = storedFiles.some((entry) => entry.path.startsWith('base/'));
+		const hasBase = storedFiles.some((entry) => entry.path.toLowerCase().startsWith('base/'));
 		play.textContent = runtimeReady || !engineScript ? 'Play' : 'Starting the engine…';
 		play.disabled = !engineScript || !webgl2 || !runtimeReady || busy || started || !hasBase;
 		hint.classList.remove('error');
@@ -681,9 +689,32 @@ IndexedDB.
 
 		$('loading').hidden = true;
 		$('game').hidden = false;
+		fitCanvas();
 		$('canvas').focus();
 		updateCapture();
 		Module.removeRunDependency('launcher');
+	}
+
+	// Keep the canvas element's box the same shape as its bitmap, centered in
+	// the window. The mouse is mapped across that box, so a full-window canvas
+	// with the picture letterboxed inside it would mis-click.
+	function fitCanvas() {
+		const canvas = $('canvas');
+		const bw = canvas.width;
+		const bh = canvas.height;
+		if (!bw || !bh) {
+			return;
+		}
+		const scale = Math.min(window.innerWidth / bw, window.innerHeight / bh);
+		canvas.style.width = Math.floor(bw * scale) + 'px';
+		canvas.style.height = Math.floor(bh * scale) + 'px';
+	}
+
+	function focusGame() {
+		const canvas = $('canvas');
+		if (canvas && canvas.focus) {
+			canvas.focus({ preventScroll: true });
+		}
 	}
 
 	function splitArgs(text) {
@@ -768,7 +799,12 @@ IndexedDB.
 	});
 
 	$('play').onclick = start;
-	$('fullscreen').onclick = () => Module.requestFullscreen(false, false);
+	$('fullscreen').onclick = () => {
+		if (Module.requestFullscreen) {
+			Module.requestFullscreen(false, false);
+		}
+		focusGame();
+	};
 	$('show-log').onclick = () => {
 		if ($('log').hidden) {
 			showLog();
@@ -776,7 +812,10 @@ IndexedDB.
 			$('log').hidden = true;
 		}
 		$('show-log').textContent = $('log').hidden ? 'Log' : 'Hide log';
+		focusGame();
 	};
+	addEventListener('resize', fitCanvas);
+	new MutationObserver(fitCanvas).observe($('canvas'), { attributes: true, attributeFilter: ['width', 'height'] });
 	$('error-log').onclick = showLog;
 
 	// Pointer lock follows the engine. SDL asks for it when the game wants
@@ -838,6 +877,7 @@ IndexedDB.
 	$('capture-button').onclick = () => {
 		resumeAudio();
 		requestPointerLock.call($('canvas'));
+		focusGame();
 	};
 	$('canvas').addEventListener('mousedown', () => {
 		resumeAudio();
@@ -855,12 +895,25 @@ IndexedDB.
 	if (!engineScript) {
 		updatePlayButton();
 	} else {
-		const script = document.createElement('script');
+		const plainSrc = engineScript.getAttribute('src');
 		const useJspi = typeof WebAssembly.Suspending === 'function'
 			&& new URLSearchParams(location.search).get('jspi') !== '0';
-		script.src = useJspi ? engineScript.getAttribute('src').replace(/\.js$/, '.jspi.js') : engineScript.getAttribute('src');
-		script.async = true;
-		document.body.append(script);
+		const loadEngine = (src, fallback) => {
+			const script = document.createElement('script');
+			script.src = src;
+			script.async = true;
+			script.onerror = () => {
+				if (fallback) {
+					log('The fast loading-screen build failed to load. Using the other one.');
+					loadEngine(fallback, null);
+				} else {
+					$('play-hint').textContent = 'The game engine failed to load. Reload the page to try again.';
+					$('play-hint').classList.add('error');
+				}
+			};
+			document.body.append(script);
+		};
+		loadEngine(useJspi ? plainSrc.replace(/\.js$/, '.jspi.js') : plainSrc, useJspi ? plainSrc : null);
 	}
 })();
 </script>
