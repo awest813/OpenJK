@@ -41,12 +41,16 @@ this environment's proxy).
 Players add the `.pk3` files of their own copy of the game on the launcher
 page; they are stored in the browser (OPFS) and loaded into memory on
 Play, so a full install needs ~1.5 GB of RAM. Configs and saves live in
-IndexedDB. The mouse is captured only while the game asks for mouselook
-(a request that isn't a click shows a button, and menus are not covered).
-The canvas keeps the picture's aspect ratio, so the cursor lines up when
-the window is a different shape. A folder named `Base` is stored as `base`.
-While the game is focused, the page keeps the browser from scrolling or
-leaving on a key the game also uses.
+IndexedDB. The landing page and each client share one launcher: a mode
+switch (single player, multiplayer, experimental rend2), status for WebGL,
+the engine, and `assets0.pk3`–`assets3.pk3`, and the file list grouped by
+directory. Once any file is stored, Play is the first card. Removing a file
+or a whole directory asks on the button itself. A folder named `Base` is
+stored as `base`. The mouse is captured only while the game asks for
+mouselook (a request that isn't a click shows a button, and menus are not
+covered). The canvas keeps the picture's aspect ratio, so the cursor lines
+up when the window is a different shape. While the game is focused, the
+page keeps the browser from scrolling or leaving on a key the game also uses.
 
 ### How it works
 

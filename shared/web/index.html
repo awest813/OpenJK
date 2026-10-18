@@ -6,80 +6,123 @@
 <meta name="color-scheme" content="dark">
 <title>OpenJK</title>
 <style>
-	:root { color-scheme: dark; --bg: #0b0d10; --panel: #15181d; --panel-2: #1c2027; --line: #2a2f38; --text: #e7e9ec;
-		--muted: #9aa2ad; --accent: #4f9cf0; --ok: #58c08a; --radius: 10px; }
+	:root {
+		color-scheme: dark;
+		--bg: #0c0d0f;
+		--panel: #16181c;
+		--panel-2: #1e2126;
+		--line: #2e3338;
+		--text: #f3efe6;
+		--muted: #a39e94;
+		--accent: #e2a15a;
+		--accent-ink: #24180c;
+		--ok: #8fc48a;
+		--warn: #e2b04a;
+		--danger: #e06a62;
+		--radius: 12px;
+	}
 	* { box-sizing: border-box; }
-	html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+	html, body { margin: 0; min-height: 100%; color: var(--text);
+		font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+		background:
+			radial-gradient(1100px 380px at 50% -120px, rgba(226, 161, 90, .16), transparent 62%),
+			var(--bg); }
+	a { color: var(--accent); }
 	:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-	main { max-width: 720px; margin: 0 auto; padding: 24px 16px 64px; }
-	h1 { font-size: 26px; margin: 0; letter-spacing: -0.01em; }
+	main { max-width: 760px; margin: 0 auto; padding: 28px 20px 72px; }
+	header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+	.mark { width: 42px; height: 42px; display: grid; place-items: center; flex: none; border-radius: 11px;
+		background: linear-gradient(165deg, #3d2c18, #17140f); border: 1px solid rgba(226, 161, 90, .45);
+		color: var(--accent); font-weight: 750; font-size: 14px; letter-spacing: .06em; }
+	h1 { font-size: 22px; margin: 0; letter-spacing: -0.02em; line-height: 1.1; }
 	p { margin: 0 0 12px; }
-	.lead { color: var(--muted); margin: 6px 0 20px; }
+	.lead { color: var(--muted); margin: 8px 0 22px; }
 	.muted { color: var(--muted); }
 	.small { font-size: 13px; }
-	.cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-	a.card { display: block; color: inherit; text-decoration: none; background: var(--panel); border: 1px solid var(--line);
-		border-radius: var(--radius); padding: 18px; transition: border-color .15s; }
-	a.card:hover { border-color: var(--accent); }
-	a.card strong { display: block; font-size: 17px; margin-bottom: 4px; }
-	a.card .go { display: block; margin-top: 12px; color: var(--accent); font-weight: 600; }
-	#data { display: flex; gap: 8px; align-items: flex-start; margin: 20px 0 0; font-size: 14px; }
+	.cards { display: grid; gap: 14px; }
+	a.card { display: block; color: inherit; text-decoration: none; background: var(--panel);
+		border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 18px 16px;
+		transition: border-color .15s, background .15s; }
+	a.card:hover { border-color: var(--accent); background: #1b1e23; }
+	a.card .kicker { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+	a.card strong { font-size: 18px; letter-spacing: -0.01em; }
+	a.card .go { color: var(--accent); font-weight: 700; font-size: 14px; white-space: nowrap; }
+	.tag { font-size: 11px; font-weight: 750; letter-spacing: .04em; text-transform: uppercase;
+		color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 2px 8px; }
+	#data { display: flex; gap: 8px; align-items: flex-start; margin: 18px 0 0; font-size: 14px; }
 	#data::before { content: ""; flex: none; width: 8px; height: 8px; margin-top: 7px; border-radius: 50%; background: var(--muted); }
 	#data.ok::before { background: var(--ok); }
+	#data.warn::before { background: var(--warn); }
+	#data.bad::before { background: var(--danger); }
+	#webgl { color: var(--danger); }
 	.footer { margin-top: 28px; }
 	@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
 <main>
-	<h1>OpenJK</h1>
-	<p class="lead">Star Wars Jedi Knight: Jedi Academy, running in your browser with your own copy of the game.</p>
+	<header>
+		<div class="mark" aria-hidden="true">JK</div>
+		<h1>OpenJK</h1>
+	</header>
+	<p class="lead">Star Wars Jedi Knight: Jedi Academy, in the browser, using your own copy of the game. Pick a mode. Both share the game data you add on the next page.</p>
 	<div class="cards">
 		<a class="card" href="openjk_sp.wasm32.html">
-			<strong>Single player</strong>
+			<span class="kicker"><strong>Single player</strong><span class="go">Open</span></span>
 			<span class="muted">The Jedi Academy campaign.</span>
-			<span class="go">Open →</span>
 		</a>
 		<a class="card" href="openjk.wasm32.html">
-			<strong>Multiplayer</strong>
-			<span class="muted">Play against bots, or join servers through this site's network relay.</span>
-			<span class="go">Open →</span>
+			<span class="kicker"><strong>Multiplayer</strong><span class="go">Open</span></span>
+			<span class="muted">Bots on this machine, or other servers through this site's relay.</span>
+		</a>
+		<a class="card" href="openjk_rend2.wasm32.html">
+			<span class="kicker"><strong>Rend2</strong><span class="go">Open</span></span>
+			<span class="muted">Multiplayer with the rend2 renderer. Same game data, a different picture. Experimental.</span>
 		</a>
 	</div>
-	<p class="muted small" style="margin-top: 14px">Also available: <a href="openjk_rend2.wasm32.html">multiplayer with the
-		rend2 renderer</a> (experimental).</p>
-	<p id="data">You'll add the game data from your copy of Jedi Academy on the next page. Both modes share it.</p>
+	<p id="data">You'll add the .pk3 files from your Jedi Academy install on the next page. They stay in this browser.</p>
 	<p class="muted small" id="webgl" hidden></p>
 	<p class="footer muted small">OpenJK is open source and not affiliated with Raven Software, Activision or Lucasfilm.
-		Game data stays in this browser and is never uploaded.</p>
+		Game data is never uploaded.</p>
 </main>
 <script>
 'use strict';
-// Show whether game data is already stored (the launcher keeps it in OPFS)
 (async () => {
+	const required = ['assets0.pk3', 'assets1.pk3', 'assets2.pk3', 'assets3.pk3'];
 	try {
 		const root = await navigator.storage.getDirectory();
 		const dir = await root.getDirectoryHandle('openjk-gamedata');
 		let count = 0;
 		let size = 0;
-		const walk = async (handle) => {
+		const names = new Set();
+		const walk = async (handle, prefix) => {
 			for await (const [name, child] of handle.entries()) {
 				if (child.kind === 'directory') {
-					await walk(child);
+					await walk(child, prefix + name + '/');
 				} else if (!name.startsWith('.')) {
 					count++;
 					size += (await child.getFile()).size;
+					if (prefix.toLowerCase() === 'base/') {
+						names.add(name.toLowerCase());
+					}
 				}
 			}
 		};
-		await walk(dir);
+		await walk(dir, '');
 		if (count) {
 			const data = document.getElementById('data');
-			data.className = 'ok';
 			const sizeText = size >= 1 << 30 ? `${(size / (1 << 30)).toFixed(2)} GB`
 				: size >= 1 << 20 ? `${(size / (1 << 20)).toFixed(1)} MB`
-				: `${Math.max(1, Math.ceil(size / 1024))} KB`;
-			data.textContent = `Your game data is ready: ${count} file${count === 1 ? '' : 's'}, ${sizeText} stored in this browser.`;
+				: size ? `${Math.max(1, Math.ceil(size / 1024))} KB`
+				: '0 KB';
+			const missing = required.filter((name) => !names.has(name));
+			if (!missing.length) {
+				data.className = 'ok';
+				data.textContent = `Game data is ready: ${count} file${count === 1 ? '' : 's'}, ${sizeText} stored in this browser.`;
+			} else {
+				data.className = 'warn';
+				data.textContent = `${count} file${count === 1 ? '' : 's'}, ${sizeText} stored. Still missing ${missing.join(', ')} from GameData/base.`;
+			}
 		}
 	} catch (e) {
 		// nothing stored yet, or no OPFS
