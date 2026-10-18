@@ -67,6 +67,7 @@ EM_JS( void, NetWeb_Open, ( const char *url ), {
 		var socket = new WebSocket(net.url);
 		socket.binaryType = 'arraybuffer';
 		socket.onopen = function () {
+			net.warned = false;
 			// tell a new relay connection about all host names first
 			for (var ip in net.names)
 				socket.send(net.names[ip]);
@@ -87,6 +88,9 @@ EM_JS( void, NetWeb_Open, ( const char *url ), {
 				net.socket = null;
 		};
 		socket.onerror = function () {
+			if (net.warned)
+				return;
+			net.warned = true;
 			err('relay: can\'t reach ' + net.url);
 		};
 		net.socket = socket;

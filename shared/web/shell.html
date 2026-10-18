@@ -20,80 +20,131 @@ IndexedDB.
 <style>
 	:root {
 		color-scheme: dark;
-		--bg: #0b0d10;
-		--panel: #15181d;
-		--panel-2: #1c2027;
-		--line: #2a2f38;
-		--text: #e7e9ec;
-		--muted: #9aa2ad;
-		--accent: #4f9cf0;
-		--accent-strong: #2f7fdc;
-		--ok: #58c08a;
+		--bg: #0c0d0f;
+		--panel: #16181c;
+		--panel-2: #1e2126;
+		--line: #2e3338;
+		--text: #f3efe6;
+		--muted: #a39e94;
+		--accent: #e2a15a;
+		--accent-strong: #c4843a;
+		--accent-ink: #24180c;
+		--ok: #8fc48a;
 		--warn: #e2b04a;
-		--danger: #e0605a;
-		--radius: 10px;
+		--danger: #e06a62;
+		--radius: 12px;
 	}
 	* { box-sizing: border-box; }
-	html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
-		font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+	html, body { margin: 0; min-height: 100%; color: var(--text);
+		font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+		background:
+			radial-gradient(1100px 380px at 50% -120px, rgba(226, 161, 90, .16), transparent 62%),
+			var(--bg); }
 	a { color: var(--accent); }
-	code { font: 0.92em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--panel-2);
-		padding: 1px 5px; border-radius: 4px; }
+	code, .path { font: 0.92em ui-monospace, SFMono-Regular, Menlo, monospace; }
+	code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+	.path { color: var(--text); }
 	:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-	#launcher { max-width: 720px; margin: 0 auto; padding: 24px 16px 64px; }
-	header { display: flex; align-items: center; justify-content: space-between; gap: 12px;
-		flex-wrap: wrap; margin-bottom: 4px; }
-	header .brand { display: flex; align-items: baseline; gap: 10px; }
-	h1 { font-size: 26px; margin: 0; letter-spacing: -0.01em; }
+	#launcher { max-width: 760px; margin: 0 auto; padding: 28px 20px 72px; display: flex; flex-direction: column; }
+	header { order: -1; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+		flex-wrap: wrap; margin-bottom: 18px; }
+	.brand { display: flex; align-items: center; gap: 12px; }
+	.mark { width: 42px; height: 42px; display: grid; place-items: center; flex: none; border-radius: 11px;
+		background: linear-gradient(165deg, #3d2c18, #17140f); border: 1px solid rgba(226, 161, 90, .45);
+		color: var(--accent); font-weight: 750; font-size: 14px; letter-spacing: .06em; }
+	h1 { font-size: 22px; margin: 0; letter-spacing: -0.02em; line-height: 1.1; }
 	h1 a { color: inherit; text-decoration: none; }
-	.pill { font-size: 13px; font-weight: 600; color: var(--accent); background: rgba(79, 156, 240, .12);
-		border: 1px solid rgba(79, 156, 240, .35); border-radius: 999px; padding: 2px 10px; }
-	header nav a { font-size: 14px; }
-	.lead { color: var(--muted); margin: 6px 0 20px; }
-	h2 { font-size: 16px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
-	h2 .step { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
-		background: var(--panel-2); border: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+	#mode { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+	.modes { display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; background: var(--panel);
+		border: 1px solid var(--line); border-radius: 999px; }
+	.modes a { color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 650;
+		padding: 6px 12px; border-radius: 999px; }
+	.modes a:hover { color: var(--text); }
+	.modes a[aria-current="page"] { background: var(--accent); color: var(--accent-ink); }
+
+	#data-section { order: 1; }
+	#play-section { order: 2; }
+	#launcher.has-files #play-section { order: 1; }
+	#launcher.has-files #data-section { order: 2; }
+	#launcher.has-files #data-blurb { display: none; }
+	.footer { order: 3; }
+
+	section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+		padding: 18px; margin: 0 0 14px; }
+	h2 { font-size: 18px; margin: 0; letter-spacing: -0.01em; }
+	.section-head p { margin: 4px 0 0; }
 	p { margin: 0 0 12px; }
 	.muted { color: var(--muted); }
 	.small { font-size: 13px; }
-	section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-		padding: 18px; margin: 14px 0; }
 
 	button { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line);
 		border-radius: 8px; padding: 8px 14px; cursor: pointer; }
 	button:hover:not(:disabled) { border-color: var(--accent); }
 	button:disabled { opacity: .55; cursor: not-allowed; }
+	.primary:disabled, .primary:disabled:hover { opacity: 1; background: #2a241c; border-color: #3a332a; color: #8a8175; }
 	button.link { background: none; border: 0; padding: 2px 4px; color: var(--muted); font-size: 13px; }
 	button.link:hover:not(:disabled) { color: var(--danger); }
-	.primary { width: 100%; background: var(--accent-strong); border-color: var(--accent-strong); color: #fff;
-		font-weight: 650; font-size: 17px; padding: 13px 20px; }
+	.primary { width: 100%; background: var(--accent-strong); border-color: var(--accent-strong);
+		color: var(--accent-ink); font-weight: 700; font-size: 17px; padding: 13px 20px; }
 	.primary:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); }
 
-	#drop { border: 1.5px dashed var(--line); border-radius: var(--radius); padding: 18px; text-align: center;
+	.chips { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 14px 0; }
+	.chips li { font-size: 12px; font-weight: 700; letter-spacing: .01em; padding: 4px 10px; border-radius: 999px;
+		border: 1px solid var(--line); color: var(--muted); background: var(--bg); }
+	.chips li.ok { color: #b7ddb3; border-color: rgba(143, 196, 138, .45); background: rgba(143, 196, 138, .1); }
+	.chips li.warn { color: #f0d48a; border-color: rgba(226, 176, 74, .5); background: rgba(226, 176, 74, .1); }
+	.chips li.bad { color: #f0b0ab; border-color: rgba(224, 106, 98, .5); background: rgba(224, 106, 98, .1); }
+	.chips li.pending { color: var(--text); }
+
+	#drop { border: 1.5px dashed var(--line); border-radius: var(--radius); padding: 22px 18px; text-align: center;
 		background: var(--bg); transition: border-color .15s, background .15s; }
-	#drop.over { border-color: var(--accent); background: rgba(79, 156, 240, .07); }
-	#drop p { margin-bottom: 10px; }
+	#drop.over { border-color: var(--accent); background: rgba(226, 161, 90, .08); }
+	#drop p { margin: 0 0 12px; }
 	#drop .buttons { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
+	#drop.compact { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+		text-align: left; padding: 12px 14px; }
+	#drop.compact p { margin: 0; }
 
-	#files { list-style: none; margin: 14px 0 0; padding: 0; }
-	#files li { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); }
-	#files li:first-child { border-top: 0; }
-	#files .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-	#files .dir { color: var(--muted); }
-	#files .size { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 14px; white-space: nowrap; }
+	#drop-overlay { position: fixed; inset: 12px; z-index: 6; display: grid; place-items: center; text-align: center;
+		background: rgba(12, 13, 15, .78); border: 2px dashed var(--accent); border-radius: 16px;
+		pointer-events: none; }
+	#drop-overlay strong { display: block; font-size: 22px; margin-bottom: 4px; }
+	#drop-overlay span { color: var(--muted); }
 
-	.check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; margin-top: 12px; }
-	.check::before { content: ""; flex: none; width: 8px; height: 8px; margin-top: 7px; border-radius: 50%; background: var(--muted); }
-	.check.ok::before { background: var(--ok); }
-	.check.warn::before { background: var(--warn); }
-	.check.bad::before { background: var(--danger); }
+	.assets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; list-style: none;
+		padding: 0; margin: 14px 0 0; }
+	.assets li { font: 12px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 8px 10px;
+		border-radius: 8px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); }
+	.assets li.ok { color: #d5ead2; border-color: rgba(143, 196, 138, .45); }
+	.assets li.missing { color: var(--muted); }
+	#assets-note { margin: 8px 0 0; }
+	#assets-note.warn { color: var(--warn); }
+	#assets-note.bad { color: var(--danger); }
+	#assets-note.ok { color: var(--ok); }
 
 	.progress { margin-top: 12px; }
 	.progress .bar { height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
 	.progress .bar div { height: 100%; width: 0; background: var(--accent); transition: width .1s linear; }
 	.progress .label { font-size: 13px; color: var(--muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
 
+	#files { margin-top: 4px; }
+	.group { margin-top: 16px; }
+	.group-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+	.group-head h3 { margin: 0; font: 600 14px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
+	.group-head .meta { color: var(--muted); font-size: 13px; flex: 1; }
+	.group ul { list-style: none; margin: 6px 0 0; padding: 0; }
+	.group li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+	.group .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+	.group .size { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; white-space: nowrap; }
+
+	#status { margin: 12px 0 0; }
+	#status:empty, #play-hint:empty { display: none; }
+	#status.error, #play-hint.error { color: var(--danger); }
+	#storage { margin: 12px 0 0; }
+	#play-hint { text-align: center; margin: 8px 0 0; }
+
+	details { margin-top: 14px; }
 	details summary { cursor: pointer; color: var(--muted); font-size: 14px; list-style: none; }
 	details summary::-webkit-details-marker { display: none; }
 	details summary::before { content: "▸"; display: inline-block; width: 1em; transition: transform .15s; }
@@ -105,36 +156,41 @@ IndexedDB.
 		background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
 	input.text:focus { border-color: var(--accent); outline: none; }
 
-	#play-hint { text-align: center; margin: 8px 0 0; }
-	#play-hint:empty, #status:empty { display: none; }
-	#status.error, #play-hint.error { color: var(--danger); }
-	.footer { margin-top: 28px; font-size: 13px; color: var(--muted); }
+	.footer { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
 
 	/* game, loading and error screens */
-	#game { position: fixed; inset: 0; background: #000; }
-	#canvas { display: block; width: 100%; height: 100%; object-fit: contain; outline: none; }
+	#game { position: fixed; inset: 0; background: #000; display: grid; place-items: center; overflow: hidden; }
+	/* sized to the picture's aspect (see fitCanvas); stretching the bitmap to the
+	   window would put the mouse in the wrong place wherever the aspects differ */
+	#canvas { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; outline: none; }
 	.overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; }
-	.overlay .card { max-width: 440px; width: 100%; background: rgba(21, 24, 29, .94); border: 1px solid var(--line);
+	.overlay .card { max-width: 440px; width: 100%; background: rgba(22, 24, 28, .96); border: 1px solid var(--line);
 		border-radius: var(--radius); padding: 22px; text-align: center; }
-	.overlay h2 { justify-content: center; font-size: 18px; margin-bottom: 8px; }
+	.overlay h2 { font-size: 18px; margin-bottom: 8px; }
 	#loading { background: var(--bg); }
-	#capture { background: rgba(0, 0, 0, .45); cursor: pointer; }
-	#capture .card { pointer-events: none; }
+	#capture { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 2;
+		max-width: calc(100% - 32px); }
+	#capture button { background: rgba(22, 24, 28, .94); border-color: var(--accent); color: var(--text);
+		box-shadow: 0 8px 24px rgba(0, 0, 0, .35); }
 	#error { background: rgba(0, 0, 0, .75); z-index: 3; }
 	#error .card { text-align: left; }
 	#error .buttons { display: flex; gap: 8px; margin-top: 14px; }
 	#game-bar { position: fixed; top: 10px; right: 10px; display: flex; gap: 6px; z-index: 2;
 		opacity: .2; transition: opacity .2s; }
 	#game-bar:hover, #game-bar:focus-within { opacity: 1; }
-	#game-bar button { background: rgba(21, 24, 29, .9); font-size: 13px; padding: 6px 10px; }
+	#game-bar button { background: rgba(22, 24, 28, .9); font-size: 13px; padding: 6px 10px; }
 	#log { position: fixed; left: 0; right: 0; bottom: 0; max-height: 40vh; overflow: auto; margin: 0; z-index: 2;
 		padding: 8px 12px; background: rgba(0, 0, 0, .88); color: #cfd3d8; font: 12px/1.4 ui-monospace, monospace;
 		white-space: pre-wrap; }
 	[hidden] { display: none !important; }
 
-	@media (max-width: 480px) {
+	@media (max-width: 640px) {
+		#launcher { padding: 20px 14px 56px; }
 		section { padding: 14px; }
-		#drop { padding: 14px; }
+		.modes { width: 100%; }
+		.modes a { text-align: center; white-space: nowrap; }
+		.assets { grid-template-columns: 1fr 1fr; }
+		#drop.compact { flex-direction: column; align-items: stretch; text-align: center; }
 	}
 	@media (prefers-reduced-motion: reduce) {
 		* { transition: none !important; }
@@ -145,17 +201,41 @@ IndexedDB.
 <div id="launcher">
 	<header>
 		<div class="brand">
-			<h1><a href="./">OpenJK</a></h1>
-			<span class="pill" id="mode">Multiplayer</span>
+			<div class="mark" aria-hidden="true">JK</div>
+			<div>
+				<h1><a href="./">OpenJK</a></h1>
+				<p id="mode">Multiplayer</p>
+			</div>
 		</div>
-		<nav><a id="switch-mode" href="openjk_sp.wasm32.html">Switch to single player</a></nav>
+		<nav class="modes" aria-label="Game mode">
+			<a href="openjk_sp.wasm32.html" data-mode="sp">Single player</a>
+			<a href="openjk.wasm32.html" data-mode="mp">Multiplayer</a>
+			<a href="openjk_rend2.wasm32.html" data-mode="rend2" title="Experimental renderer">Rend2</a>
+		</nav>
 	</header>
-	<p class="lead">Star Wars Jedi Knight: Jedi Academy, running in your browser with your own copy of the game.</p>
 
-	<section aria-labelledby="data-heading">
-		<h2 id="data-heading"><span class="step">1</span>Add your game data</h2>
-		<p class="muted small">Use the <code>.pk3</code> files from your Jedi Academy install, in
-			<code>GameData/base</code>. They stay in this browser and are never uploaded; you only add them once.</p>
+	<section id="play-section" aria-labelledby="play-heading">
+		<div class="section-head">
+			<h2 id="play-heading">Play</h2>
+			<p class="muted" id="mode-blurb">Bots on this machine, or other servers through the relay.</p>
+		</div>
+		<ul class="chips" id="readiness" aria-label="Ready to play"></ul>
+		<button class="primary" id="play" disabled>Starting the engine…</button>
+		<p class="muted small" id="play-hint" aria-live="polite"></p>
+		<details id="advanced">
+			<summary>Command line and network</summary>
+			<label class="field"><span>Extra command line, for example <code>+set fs_game mymod</code> or <code>+connect host:port</code></span>
+				<input class="text" id="args" spellcheck="false" autocomplete="off"></label>
+			<label class="field" id="relay-field" hidden><span>Network relay. Leave empty to use this site's.</span>
+				<input class="text" id="relay" spellcheck="false" autocomplete="off" placeholder="wss://example.com/relay"></label>
+		</details>
+	</section>
+
+	<section id="data-section" aria-labelledby="data-heading">
+		<div class="section-head">
+			<h2 id="data-heading">Game data</h2>
+			<p class="muted small" id="data-blurb">Add the .pk3 files from your own Jedi Academy install. They stay in this browser. Loose files, and any folder that contains the retail packs, are stored in <span class="path">base</span>. A folder of other pk3s keeps its name, so choosing a mod folder stores <span class="path">mymod/something.pk3</span>.</p>
+		</div>
 
 		<div id="drop">
 			<p>Drop <code>.pk3</code> files or your <code>GameData</code> folder here</p>
@@ -172,28 +252,24 @@ IndexedDB.
 			<div class="label"></div>
 		</div>
 
-		<p class="muted small" id="status" role="status" aria-live="polite" style="margin: 12px 0 0"></p>
+		<p class="muted small" id="status" role="status" aria-live="polite"></p>
 
-		<ul id="files" aria-label="Stored game files"></ul>
-		<div class="check" id="assets-check" hidden></div>
-		<p class="muted small" id="storage" style="margin: 10px 0 0"></p>
-	</section>
+		<ul class="assets" id="assets-check" aria-label="Retail asset packs"></ul>
+		<p class="muted small" id="assets-note"></p>
 
-	<section aria-labelledby="play-heading">
-		<h2 id="play-heading"><span class="step">2</span>Play</h2>
-		<details id="advanced">
-			<summary>Advanced options</summary>
-			<label class="field"><span>Extra command line, e.g. <code>+set fs_game mymod</code> or <code>+connect host:port</code></span>
-				<input class="text" id="args" spellcheck="false" autocomplete="off"></label>
-			<label class="field" id="relay-field" hidden><span>Network relay (leave empty to use this site's)</span>
-				<input class="text" id="relay" spellcheck="false" autocomplete="off" placeholder="wss://example.com/relay"></label>
-		</details>
-		<p style="margin: 14px 0 0"><button class="primary" id="play" disabled>Starting the engine…</button></p>
-		<p class="muted small" id="play-hint" aria-live="polite"></p>
+		<div id="files" aria-label="Stored game files"></div>
+		<p class="muted small" id="storage"></p>
 	</section>
 
 	<p class="footer">OpenJK is open source and not affiliated with Raven Software, Activision or Lucasfilm.
-		Click the game to capture the mouse, and press Esc to release it.</p>
+		Menus use the normal cursor. In game, click the picture to capture the mouse, and press Esc to release it.</p>
+</div>
+
+<div id="drop-overlay" hidden>
+	<div>
+		<strong>Drop to add game data</strong>
+		<span>.pk3 files, or a GameData folder</span>
+	</div>
 </div>
 
 <div id="loading" class="overlay" hidden>
@@ -208,11 +284,8 @@ IndexedDB.
 
 <div id="game" hidden>
 	<canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
-	<div id="capture" class="overlay" hidden>
-		<div class="card">
-			<h2>Click to play</h2>
-			<p class="muted small" style="margin: 0">The game takes over the mouse. Press Esc to get it back.</p>
-		</div>
+	<div id="capture" hidden>
+		<button type="button" id="capture-button">Click to capture the mouse</button>
 	</div>
 	<div id="game-bar">
 		<button id="fullscreen" title="Fullscreen">Fullscreen</button>
@@ -222,7 +295,7 @@ IndexedDB.
 
 <div id="error" class="overlay" hidden role="alertdialog" aria-labelledby="error-title">
 	<div class="card">
-		<h2 id="error-title" style="justify-content: flex-start">The game stopped</h2>
+		<h2 id="error-title">The game stopped</h2>
 		<p class="muted small" id="error-text"></p>
 		<div class="buttons">
 			<button class="primary" style="width: auto" onclick="location.reload()">Back to the launcher</button>
@@ -239,21 +312,51 @@ IndexedDB.
 
 (function () {
 	const $ = (id) => document.getElementById(id);
-	const isMultiplayer = !/openjk_sp/.test(location.pathname);
+	const pageName = (location.pathname.split('/').pop() || '').toLowerCase();
+	const isSinglePlayer = pageName.includes('openjk_sp');
+	const isRend2 = pageName.includes('rend2');
+	const isMultiplayer = !isSinglePlayer;
+	const modeKey = isSinglePlayer ? 'sp' : isRend2 ? 'rend2' : 'mp';
 	const homePath = '/home/web_user/.local/share/openjk';
 	const gamePath = '/game';
 	const requiredAssets = ['assets0.pk3', 'assets1.pk3', 'assets2.pk3', 'assets3.pk3'];
 	const logLines = [];
 	let runtimeReady = false;
+	let engineFailed = false;
 	let busy = false;
 	let started = false;
 	let storedFiles = [];
+	let pendingRemove = null;
+	let listGeneration = 0;
+	let storagePersisted = false;
+	let pointerLockWanted = false;
+	let captureTimer = null;
 
-	$('mode').textContent = isMultiplayer ? 'Multiplayer' : 'Single player';
-	$('switch-mode').textContent = isMultiplayer ? 'Switch to single player' : 'Switch to multiplayer';
-	$('switch-mode').href = isMultiplayer ? 'openjk_sp.wasm32.html' : 'openjk.wasm32.html';
+	function hasWebGL2() {
+		try {
+			const canvas = document.createElement('canvas');
+			return !!canvas.getContext('webgl2');
+		} catch (e) {
+			return false;
+		}
+	}
+	const webgl2 = hasWebGL2();
+	const engineScript = document.getElementById('engine-script').content.querySelector('script');
+
+	const modeCopy = {
+		sp: ['Single player', 'The Jedi Academy campaign.'],
+		mp: ['Multiplayer', 'Bots on this machine, or other servers through the relay.'],
+		rend2: ['Rend2', 'Multiplayer with the experimental rend2 renderer.'],
+	};
+	$('mode').textContent = modeCopy[modeKey][0];
+	$('mode-blurb').textContent = modeCopy[modeKey][1];
+	document.title = 'OpenJK ' + modeCopy[modeKey][0];
+	for (const link of document.querySelectorAll('.modes a')) {
+		if (link.dataset.mode === modeKey) {
+			link.setAttribute('aria-current', 'page');
+		}
+	}
 	$('relay-field').hidden = !isMultiplayer;
-	document.title = isMultiplayer ? 'OpenJK Multiplayer' : 'OpenJK Single Player';
 
 	function setStatus(text, isError) {
 		$('status').textContent = text;
@@ -278,6 +381,7 @@ IndexedDB.
 	}
 
 	function formatSize(bytes) {
+		if (!bytes) return '0 KB';
 		if (bytes >= 1 << 30) return (bytes / (1 << 30)).toFixed(2) + ' GB';
 		if (bytes >= 1 << 20) return (bytes / (1 << 20)).toFixed(1) + ' MB';
 		return Math.max(1, Math.ceil(bytes / 1024)) + ' KB';
@@ -302,6 +406,12 @@ IndexedDB.
 		try { localStorage.setItem('openjk.' + name, value); } catch (e) { /* not essential */ }
 	}
 
+	function baseNames() {
+		return new Set(storedFiles
+			.filter((entry) => entry.path.toLowerCase().startsWith('base/'))
+			.map((entry) => entry.path.substring(entry.path.indexOf('/') + 1).toLowerCase()));
+	}
+
 	//========================================================================
 	// Game data store: OPFS when available, otherwise this session only
 
@@ -319,8 +429,16 @@ IndexedDB.
 					if (probe.createWritable) {
 						await dir.removeEntry('.probe');
 						this.root = dir;
+						if (navigator.storage.persisted) {
+							storagePersisted = await navigator.storage.persisted().catch(() => false);
+						}
 						if (navigator.storage.persist) {
-							navigator.storage.persist().catch(() => {});
+							navigator.storage.persist().then((granted) => {
+								storagePersisted = storagePersisted || !!granted;
+								if (!busy && !pendingRemove) {
+									refreshList();
+								}
+							}).catch(() => {});
 						}
 						return;
 					}
@@ -328,7 +446,7 @@ IndexedDB.
 			} catch (e) {
 				console.warn('OPFS unavailable', e);
 			}
-			setStatus('This browser can\'t keep game files, so you\'ll have to add them again on every visit.');
+			setStatus('This browser can\'t keep game files, so you\'ll have to add them again on every visit.', true);
 		},
 
 		async directory(path, create) {
@@ -384,7 +502,7 @@ IndexedDB.
 				for await (const [name, handle] of dir.entries()) {
 					if (handle.kind === 'directory') {
 						await walk(handle, prefix + name + '/');
-					} else {
+					} else if (!name.startsWith('.')) {
 						const file = await handle.getFile();
 						files.push({ path: prefix + name, size: file.size, file });
 					}
@@ -395,20 +513,55 @@ IndexedDB.
 		},
 	};
 
-	// Where a picked file goes: "base/assets0.pk3", "mymod/zz.pk3", ... or null
+	// Where a picked file goes: "base/assets0.pk3", "mymod/zz.pk3", ... or null.
+	// A path that still contains "." or ".." is rejected. "base" is found by
+	// name, in any case, wherever it sits (GameData/Base, or a parent folder).
+	// With no base directory, a GameData wrapper is dropped and what remains
+	// is mod/file. A bare filename goes in base. pathsFor() then moves a
+	// folder of the retail packs into base even when that folder has another name.
 	function gamePathFor(relativePath) {
-		const parts = relativePath.split('/').filter(Boolean);
-		if (parts.length > 1) {
-			parts.shift(); // the folder that was picked or dropped
+		let parts = relativePath.split('/').filter(Boolean);
+		if (!parts.length || parts.some((part) => part === '.' || part === '..')) {
+			return null;
 		}
-		const known = parts.map((part) => part.toLowerCase()).lastIndexOf('base');
-		if (known > 0) {
-			parts.splice(0, known); // ".../GameData/base/x.pk3" -> "base/x.pk3"
+		const baseAt = parts.map((part) => part.toLowerCase()).lastIndexOf('base');
+		if (baseAt >= 0) {
+			const rest = parts.slice(baseAt);
+			return rest.length === 2 ? 'base/' + rest[1] : null;
+		}
+		if (parts.length >= 3 && parts[1].toLowerCase() === 'gamedata') {
+			parts = parts.slice(2);
+		} else if (parts.length >= 2 && parts[0].toLowerCase() === 'gamedata') {
+			parts = parts.slice(1);
+		} else if (parts.length >= 3) {
+			parts = parts.slice(1);
 		}
 		if (parts.length === 1) {
-			parts.unshift('base');
+			return 'base/' + parts[0];
 		}
-		return parts.length === 2 ? parts.join('/') : null;
+		if (parts.length === 2) {
+			return parts[0].toLowerCase() === 'base' ? 'base/' + parts[1] : parts.join('/');
+		}
+		return null;
+	}
+
+	// Retail packs belong in base even if the folder they came from is not named base.
+	function pathsFor(picked) {
+		const files = picked
+			.filter(({ file }) => /\.pk3$/i.test(file.name))
+			.map(({ file, relativePath }) => ({ file, path: gamePathFor(relativePath) }))
+			.filter(({ path }) => path);
+		const dirs = new Set(files.map((entry) => entry.path.slice(0, entry.path.indexOf('/'))));
+		if (dirs.size === 1) {
+			const dir = [...dirs][0];
+			const retail = files.some((entry) => /^assets[0-3]\.pk3$/i.test(entry.path.slice(dir.length + 1)));
+			if (dir !== 'base' && retail) {
+				for (const entry of files) {
+					entry.path = 'base/' + entry.path.slice(dir.length + 1);
+				}
+			}
+		}
+		return files;
 	}
 
 	// Files from a drop, including the contents of dropped folders
@@ -445,14 +598,13 @@ IndexedDB.
 		if (busy || started) {
 			return;
 		}
-		const files = picked
-			.filter(({ file }) => /\.pk3$/i.test(file.name))
-			.map(({ file, relativePath }) => ({ file, path: gamePathFor(relativePath) }))
-			.filter(({ path }) => path);
+		const files = pathsFor(picked);
 		if (!files.length) {
 			setStatus('No .pk3 files there. Look in the GameData/base folder of your Jedi Academy install.', true);
 			return;
 		}
+		const storedDirs = [...new Set(files.map((entry) => entry.path.slice(0, entry.path.indexOf('/'))))];
+		const storedWhere = storedDirs.length === 1 ? ` to ${storedDirs[0]}` : '';
 
 		// skip files that are already stored with the same size
 		const known = new Map(storedFiles.map((entry) => [entry.path.toLowerCase(), entry.size]));
@@ -460,6 +612,7 @@ IndexedDB.
 		const skipped = files.length - toStore.length;
 
 		busy = true;
+		$('launcher').setAttribute('aria-busy', 'true');
 		updatePlayButton();
 		setStatus('');
 		const total = toStore.reduce((sum, { file }) => sum + file.size, 0);
@@ -474,7 +627,9 @@ IndexedDB.
 				done += file.size;
 				stored++;
 			}
-			setStatus(`Added ${plural(stored, 'file')}${skipped ? `, ${skipped} already stored` : ''}.`);
+			setStatus(!stored && skipped
+				? `${plural(skipped, 'file')} already stored.`
+				: `Added ${plural(stored, 'file')}${storedWhere}${skipped ? `, ${skipped} already stored` : ''}.`);
 		} catch (error) {
 			const full = error && error.name === 'QuotaExceededError';
 			setStatus(full
@@ -482,64 +637,145 @@ IndexedDB.
 				: `Storing the game data failed: ${error && error.message || error}`, true);
 		} finally {
 			busy = false;
+			$('launcher').removeAttribute('aria-busy');
 			$('store-progress').hidden = true;
 			await refreshList();
 		}
 	}
 
-	async function removeFile(entry) {
-		if (!confirm(`Remove ${entry.path} (${formatSize(entry.size)}) from this browser? You'd have to add it again to play.`)) {
+	async function removePaths(paths, label) {
+		if (busy || started) {
 			return;
 		}
-		await store.remove(entry.path);
-		setStatus(`Removed ${entry.path}.`);
-		await refreshList();
+		busy = true;
+		try {
+			for (const path of paths) {
+				await store.remove(path);
+			}
+			setStatus(`Removed ${label}.`);
+		} catch (error) {
+			setStatus(`Removing the game data failed: ${error && error.message || error}`, true);
+		} finally {
+			busy = false;
+			await refreshList();
+		}
+	}
+
+	function wireRemove(parent, key, label, aria, paths, doneLabel) {
+		const pending = pendingRemove === key;
+		const remove = document.createElement('button');
+		remove.className = 'link';
+		remove.textContent = pending ? 'Confirm' : label;
+		remove.setAttribute('aria-label', pending ? `Confirm: ${aria}` : aria);
+		if (pending) {
+			remove.dataset.pending = key;
+		}
+		remove.onclick = () => {
+			if (busy || started) {
+				return;
+			}
+			if (pendingRemove !== key) {
+				pendingRemove = key;
+				refreshList();
+				return;
+			}
+			pendingRemove = null;
+			removePaths(paths, doneLabel);
+		};
+		parent.append(remove);
+		if (!pending) {
+			return;
+		}
+		const cancel = document.createElement('button');
+		cancel.className = 'link';
+		cancel.textContent = 'Cancel';
+		cancel.onclick = () => {
+			pendingRemove = null;
+			refreshList();
+		};
+		parent.append(cancel);
 	}
 
 	async function refreshList() {
-		storedFiles = await store.list();
-		const list = $('files');
-		list.textContent = '';
-		for (const entry of storedFiles) {
-			const item = document.createElement('li');
-			const name = document.createElement('span');
-			name.className = 'name';
-			const slash = entry.path.indexOf('/');
-			const dir = document.createElement('span');
-			dir.className = 'dir';
-			dir.textContent = entry.path.substring(0, slash + 1);
-			name.append(dir, entry.path.substring(slash + 1));
-			const size = document.createElement('span');
-			size.className = 'size';
-			size.textContent = formatSize(entry.size);
-			const remove = document.createElement('button');
-			remove.className = 'link';
-			remove.textContent = 'Remove';
-			remove.setAttribute('aria-label', `Remove ${entry.path}`);
-			remove.onclick = () => removeFile(entry);
-			item.append(name, size, remove);
-			list.append(item);
+		const generation = ++listGeneration;
+		const files = await store.list();
+		if (generation !== listGeneration) {
+			return;
+		}
+		storedFiles = files;
+		if (pendingRemove && pendingRemove.startsWith('group:')) {
+			const dir = pendingRemove.slice('group:'.length);
+			if (!storedFiles.some((entry) => entry.path.startsWith(dir + '/'))) {
+				pendingRemove = null;
+			}
+		} else if (pendingRemove && !storedFiles.some((entry) => entry.path === pendingRemove)) {
+			pendingRemove = null;
 		}
 
-		// the retail game ships assets0-3.pk3 in base
-		const check = $('assets-check');
-		const names = new Set(storedFiles.filter((e) => e.path.startsWith('base/')).map((e) => e.path.substring(5).toLowerCase()));
-		const missing = requiredAssets.filter((name) => !names.has(name));
-		check.hidden = !storedFiles.length;
-		check.className = 'check ' + (!missing.length ? 'ok' : missing.length < requiredAssets.length ? 'warn' : 'bad');
-		check.textContent = !missing.length
-			? 'Found the game\'s assets0–3.pk3.'
-			: `Jedi Academy's GameData/base has assets0–3.pk3; ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} missing here. The game may not start without ${missing.length === 1 ? 'it' : 'them'}.`;
+		const list = $('files');
+		list.textContent = '';
+		const groups = new Map();
+		for (const entry of storedFiles) {
+			const slash = entry.path.indexOf('/');
+			const dir = slash === -1 ? '' : entry.path.substring(0, slash);
+			if (!groups.has(dir)) {
+				groups.set(dir, []);
+			}
+			groups.get(dir).push(entry);
+		}
+		for (const [dir, entries] of groups) {
+			const group = document.createElement('div');
+			group.className = 'group';
+			const head = document.createElement('div');
+			head.className = 'group-head';
+			const title = document.createElement('h3');
+			title.textContent = dir || 'files';
+			const meta = document.createElement('span');
+			meta.className = 'meta';
+			const groupSize = entries.reduce((sum, entry) => sum + entry.size, 0);
+			meta.textContent = `${plural(entries.length, 'file')} · ${formatSize(groupSize)}`;
+			head.append(title, meta);
+			wireRemove(head, 'group:' + dir, 'Remove',
+				`Remove all files in ${dir || 'this group'}`,
+				entries.map((entry) => entry.path),
+				plural(entries.length, 'file'));
+			const items = document.createElement('ul');
+			for (const entry of entries) {
+				const item = document.createElement('li');
+				const name = document.createElement('span');
+				name.className = 'name';
+				const slash = entry.path.indexOf('/');
+				name.textContent = slash === -1 ? entry.path : entry.path.substring(slash + 1);
+				const size = document.createElement('span');
+				size.className = 'size';
+				size.textContent = formatSize(entry.size);
+				item.append(name, size);
+				wireRemove(item, entry.path, 'Remove', `Remove ${entry.path}`, [entry.path], entry.path);
+				items.append(item);
+			}
+			group.append(head, items);
+			list.append(group);
+		}
+		const pendingButton = list.querySelector('[data-pending]');
+		if (pendingButton) {
+			pendingButton.focus();
+		}
 
 		const total = storedFiles.reduce((sum, entry) => sum + entry.size, 0);
-		let storage = storedFiles.length ? `${plural(storedFiles.length, 'file')}, ${formatSize(total)} stored.` : '';
+		let storage = storedFiles.length ? `${plural(storedFiles.length, 'file')}, ${formatSize(total)} stored in this browser.` : '';
 		if (storedFiles.length && navigator.storage && navigator.storage.estimate) {
 			try {
 				const { quota, usage } = await navigator.storage.estimate();
+				if (generation !== listGeneration) {
+					return;
+				}
 				if (quota) {
 					storage += ` ${formatSize(Math.max(0, quota - usage))} free for this site.`;
 				}
 			} catch (e) { /* not essential */ }
+		}
+		if (storedFiles.length && !storagePersisted && store.root) {
+			storage += ' This browser may clear the files if the device runs low on space.';
 		}
 		if (total > 1 << 30) {
 			storage += ' Starting the game needs about as much memory again.';
@@ -551,18 +787,86 @@ IndexedDB.
 	function updatePlayButton() {
 		const play = $('play');
 		const hint = $('play-hint');
-		const hasBase = storedFiles.some((entry) => entry.path.startsWith('base/'));
-		play.textContent = runtimeReady ? 'Play' : 'Starting the engine…';
-		play.disabled = !runtimeReady || busy || started || !hasBase;
+		const names = baseNames();
+		const hasBase = storedFiles.some((entry) => entry.path.toLowerCase().startsWith('base/'));
+		const missing = requiredAssets.filter((name) => !names.has(name));
+		const check = $('assets-check');
+		check.textContent = '';
+		for (const name of requiredAssets) {
+			const item = document.createElement('li');
+			const found = names.has(name);
+			item.className = found ? 'ok' : 'missing';
+			item.textContent = found || !storedFiles.length ? name : name + ' missing';
+			check.append(item);
+		}
+		const note = $('assets-note');
+		note.className = 'muted small';
+		if (!storedFiles.length) {
+			note.textContent = 'Jedi Academy\'s GameData/base contains assets0.pk3 through assets3.pk3.';
+		} else if (!missing.length) {
+			note.classList.add('ok');
+			note.textContent = 'Found assets0.pk3 through assets3.pk3.';
+		} else {
+			note.classList.add(missing.length < requiredAssets.length ? 'warn' : 'bad');
+			note.textContent = `Missing ${missing.join(', ')}. The game may not start without ${missing.length === 1 ? 'it' : 'them'}.`;
+		}
+		play.textContent = runtimeReady || !engineScript ? 'Play' : 'Starting the engine…';
+		play.disabled = !engineScript || !webgl2 || !runtimeReady || busy || started || !hasBase;
 		hint.classList.remove('error');
-		if (!runtimeReady) {
+		if (!engineScript) {
+			hint.textContent = 'This page was opened without a game engine build.';
+			hint.classList.add('error');
+		} else if (!webgl2) {
+			hint.textContent = 'This browser has no WebGL 2, which the game needs.';
+			hint.classList.add('error');
+		} else if (engineFailed) {
+			hint.textContent = 'The game engine failed to load. Reload the page to try again.';
+			hint.classList.add('error');
+		} else if (!runtimeReady) {
 			hint.textContent = 'Downloading the game engine…';
 		} else if (busy) {
 			hint.textContent = 'Wait for the files to be stored.';
 		} else if (!hasBase) {
 			hint.textContent = 'Add your game data first.';
+		} else if (missing.length) {
+			hint.textContent = `You can try Play, but ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} still missing.`;
 		} else {
 			hint.textContent = '';
+		}
+
+		$('launcher').classList.toggle('has-files', storedFiles.length > 0);
+		$('drop').classList.toggle('compact', storedFiles.length > 0);
+		const dropText = $('drop').querySelector('p');
+		if (dropText) {
+			dropText.textContent = storedFiles.length
+				? 'Drop more .pk3 files, or choose them'
+				: 'Drop .pk3 files, your GameData folder, or a mod folder';
+		}
+
+		const chips = $('readiness');
+		chips.textContent = '';
+		const addChip = (text, state) => {
+			const item = document.createElement('li');
+			item.className = state;
+			item.textContent = text;
+			chips.append(item);
+		};
+		addChip(webgl2 ? 'WebGL 2' : 'No WebGL 2', webgl2 ? 'ok' : 'bad');
+		if (!engineScript) {
+			addChip('No engine build', 'bad');
+		} else if (engineFailed) {
+			addChip('Engine failed', 'bad');
+		} else if (!runtimeReady) {
+			addChip('Engine loading', 'pending');
+		} else {
+			addChip('Engine ready', 'ok');
+		}
+		if (!hasBase) {
+			addChip('No game data', 'bad');
+		} else if (missing.length) {
+			addChip('Game data incomplete', 'warn');
+		} else {
+			addChip('Game data ready', 'ok');
 		}
 	}
 
@@ -588,6 +892,7 @@ IndexedDB.
 		if (document.pointerLockElement) {
 			document.exitPointerLock();
 		}
+		updateCapture();
 	}
 
 	async function start() {
@@ -636,8 +941,11 @@ IndexedDB.
 
 		// render at the window's size (capped), scaled to fit by CSS
 		const scale = Math.min(window.devicePixelRatio || 1, 2);
-		const width = Math.min(Math.round(window.innerWidth * scale), 2560) & ~1;
-		const height = Math.min(Math.round(window.innerHeight * scale), 1440) & ~1;
+		let width = Math.min(Math.round(window.innerWidth * scale), 2560) & ~1;
+		let height = Math.min(Math.round(window.innerHeight * scale), 1440) & ~1;
+		// a window that has not been laid out yet would ask the engine for 0×0
+		if (width < 640) width = 640;
+		if (height < 480) height = 480;
 
 		// filled in place: the runtime took its reference to the array at load
 		Module.arguments.push(
@@ -660,9 +968,32 @@ IndexedDB.
 
 		$('loading').hidden = true;
 		$('game').hidden = false;
-		$('capture').hidden = false;
+		fitCanvas();
 		$('canvas').focus();
+		updateCapture();
 		Module.removeRunDependency('launcher');
+	}
+
+	// Keep the canvas element's box the same shape as its bitmap, centered in
+	// the window. The mouse is mapped across that box, so a full-window canvas
+	// with the picture letterboxed inside it would mis-click.
+	function fitCanvas() {
+		const canvas = $('canvas');
+		const bw = canvas.width;
+		const bh = canvas.height;
+		if (!bw || !bh) {
+			return;
+		}
+		const scale = Math.min(window.innerWidth / bw, window.innerHeight / bh);
+		canvas.style.width = Math.floor(bw * scale) + 'px';
+		canvas.style.height = Math.floor(bh * scale) + 'px';
+	}
+
+	function focusGame() {
+		const canvas = $('canvas');
+		if (canvas && canvas.focus) {
+			canvas.focus({ preventScroll: true });
+		}
 	}
 
 	function splitArgs(text) {
@@ -692,10 +1023,16 @@ IndexedDB.
 		},
 	};
 
+	function markEngineFailed() {
+		engineFailed = true;
+		$('play-hint').textContent = 'The game engine failed to load. Reload the page to try again.';
+		$('play-hint').classList.add('error');
+		updatePlayButton();
+	}
+
 	window.addEventListener('error', (event) => {
 		if (!started && /\.wasm|openjk/.test(event.filename || '')) {
-			$('play-hint').textContent = 'The game engine failed to load. Reload the page to try again.';
-			$('play-hint').classList.add('error');
+			markEngineFailed();
 		}
 	});
 
@@ -720,33 +1057,180 @@ IndexedDB.
 
 	const drop = $('drop');
 	let dragDepth = 0;
-	drop.addEventListener('dragenter', (event) => { event.preventDefault(); dragDepth++; drop.classList.add('over'); });
-	drop.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; drop.classList.remove('over'); } });
-	drop.addEventListener('dragover', (event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; });
-	drop.addEventListener('drop', async (event) => {
+	function setDragging(on) {
+		drop.classList.toggle('over', on);
+		$('drop-overlay').hidden = !on;
+	}
+	addEventListener('dragenter', (event) => {
+		if ($('launcher').hidden) return;
+		event.preventDefault();
+		dragDepth++;
+		setDragging(true);
+	});
+	addEventListener('dragleave', () => {
+		if ($('launcher').hidden) return;
+		if (--dragDepth <= 0) {
+			dragDepth = 0;
+			setDragging(false);
+		}
+	});
+	addEventListener('dragover', (event) => {
+		if ($('launcher').hidden) return;
+		event.preventDefault();
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+	});
+	// anywhere on the launcher, not only the dashed box; a drop must not navigate away
+	addEventListener('drop', async (event) => {
 		event.preventDefault();
 		dragDepth = 0;
-		drop.classList.remove('over');
-		addFiles(await filesFromDrop(event.dataTransfer));
+		setDragging(false);
+		if (!$('launcher').hidden) {
+			addFiles(await filesFromDrop(event.dataTransfer));
+		}
 	});
-	// a file dropped next to the drop zone shouldn't navigate away
-	addEventListener('dragover', (event) => event.preventDefault());
-	addEventListener('drop', (event) => event.preventDefault());
 
 	$('play').onclick = start;
-	$('fullscreen').onclick = () => Module.requestFullscreen(false, false);
-	$('show-log').onclick = () => ($('log').hidden ? showLog() : ($('log').hidden = true));
+	$('fullscreen').onclick = () => {
+		if (Module.requestFullscreen) {
+			Module.requestFullscreen(false, false);
+		}
+		focusGame();
+	};
+	$('show-log').onclick = () => {
+		if ($('log').hidden) {
+			showLog();
+		} else {
+			$('log').hidden = true;
+		}
+		$('show-log').textContent = $('log').hidden ? 'Log' : 'Hide log';
+		focusGame();
+	};
+	addEventListener('resize', fitCanvas);
+	new MutationObserver(fitCanvas).observe($('canvas'), { attributes: true, attributeFilter: ['width', 'height'] });
 	$('error-log').onclick = showLog;
-	$('capture').onclick = () => $('canvas').requestPointerLock();
-	$('canvas').addEventListener('click', () => {
-		if (document.pointerLockElement !== $('canvas')) {
-			$('canvas').requestPointerLock();
+
+	// Pointer lock follows the engine. SDL asks for it when the game wants
+	// mouselook and releases it for menus; locking on every click would take
+	// the cursor away from those menus. A request from the game loop is not a
+	// user gesture, so it can fail — then the button below locks on click.
+	function resumeAudio() {
+		const contexts = [];
+		const sdl = (typeof Module !== 'undefined' && Module.SDL2) || (typeof SDL2 !== 'undefined' && SDL2);
+		if (sdl && sdl.audioContext) {
+			contexts.push(sdl.audioContext);
+		}
+		if (typeof AL !== 'undefined' && AL.currentCtx && AL.currentCtx.audioCtx) {
+			contexts.push(AL.currentCtx.audioCtx);
+		}
+		for (const ctx of contexts) {
+			if (ctx.state === 'suspended' && ctx.resume) {
+				ctx.resume();
+			}
+		}
+	}
+
+	function updateCapture() {
+		clearTimeout(captureTimer);
+		const show = started && pointerLockWanted && $('error').hidden
+			&& document.pointerLockElement !== $('canvas');
+		if (!show) {
+			$('capture').hidden = true;
+			return;
+		}
+		// Esc unlocks the pointer before the game opens the menu and releases
+		// the mouse. Wait so that doesn't flash the button.
+		captureTimer = setTimeout(() => {
+			$('capture').hidden = !(started && pointerLockWanted && $('error').hidden
+				&& document.pointerLockElement !== $('canvas'));
+		}, 250);
+	}
+
+	const requestPointerLock = HTMLCanvasElement.prototype.requestPointerLock;
+	HTMLCanvasElement.prototype.requestPointerLock = function () {
+		if (this === $('canvas')) {
+			pointerLockWanted = true;
+			updateCapture();
+		}
+		const result = requestPointerLock.apply(this, arguments);
+		if (this === $('canvas') && result && typeof result.catch === 'function') {
+			result.catch(() => updateCapture());
+		}
+		return result;
+	};
+	const exitPointerLock = Document.prototype.exitPointerLock;
+	Document.prototype.exitPointerLock = function () {
+		pointerLockWanted = false;
+		updateCapture();
+		return exitPointerLock.apply(this, arguments);
+	};
+	document.addEventListener('pointerlockchange', updateCapture);
+	document.addEventListener('pointerlockerror', updateCapture);
+	$('capture-button').onclick = () => {
+		resumeAudio();
+		requestPointerLock.call($('canvas'));
+		focusGame();
+	};
+	$('canvas').addEventListener('mousedown', (event) => {
+		// middle-click would otherwise start the browser's autoscroll.
+		// preventDefault also skips focusing the canvas, so do that ourselves.
+		event.preventDefault();
+		focusGame();
+		resumeAudio();
+		if (pointerLockWanted && document.pointerLockElement !== $('canvas')) {
+			requestPointerLock.call($('canvas'));
 		}
 	});
-	document.addEventListener('pointerlockchange', () => {
-		if (started && $('error').hidden) {
-			$('capture').hidden = document.pointerLockElement === $('canvas');
+	$('canvas').addEventListener('wheel', (event) => {
+		if (!$('game').hidden) {
+			event.preventDefault();
 		}
+	}, { passive: false });
+
+	// While the game is what's focused, the browser must not scroll, move
+	// focus, or leave the page on a key the game also uses.
+	function gameHasKeyFocus() {
+		if ($('game').hidden || !$('error').hidden) {
+			return false;
+		}
+		const target = document.activeElement;
+		if (!target || target === document.body || target === document.documentElement || target === $('canvas')) {
+			return true;
+		}
+		const tag = target.tagName;
+		return tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'BUTTON' && tag !== 'A' && !target.isContentEditable;
+	}
+	addEventListener('keydown', (event) => {
+		if ($('game').hidden) {
+			// Enter starts the game when focus isn't already on a control.
+			if (event.key === 'Enter' && !event.repeat && !$('play').disabled) {
+				const tag = document.activeElement && document.activeElement.tagName;
+				if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'BUTTON' && tag !== 'A' && tag !== 'SUMMARY') {
+					event.preventDefault();
+					start();
+				}
+			}
+			return;
+		}
+		resumeAudio();
+		if (!gameHasKeyFocus()) {
+			return;
+		}
+		const key = event.key;
+		const leaves = event.altKey || event.metaKey
+			|| (event.ctrlKey && /^(w|r|t|n|l|f|p|s|o|g|h|j|d|u)$/i.test(key));
+		const scrolls = key === ' ' || key === 'Tab' || key === 'Backspace'
+			|| key.startsWith('Arrow') || key === 'PageUp' || key === 'PageDown'
+			|| key === 'Home' || key === 'End';
+		if (leaves || scrolls) {
+			event.preventDefault();
+		}
+	});
+	addEventListener('beforeunload', (event) => {
+		if (!started || !$('error').hidden) {
+			return;
+		}
+		event.preventDefault();
+		event.returnValue = '';
 	});
 
 	updatePlayButton();
@@ -755,13 +1239,28 @@ IndexedDB.
 	// Every client is also built with JSPI (*.jspi.js), which lets the loading
 	// screen update during map loads; use that build where the browser
 	// supports it (?jspi=0 forces the other one).
-	const engineScript = document.getElementById('engine-script').content.querySelector('script');
-	const script = document.createElement('script');
-	const useJspi = typeof WebAssembly.Suspending === 'function'
-		&& new URLSearchParams(location.search).get('jspi') !== '0';
-	script.src = useJspi ? engineScript.getAttribute('src').replace(/\.js$/, '.jspi.js') : engineScript.getAttribute('src');
-	script.async = true;
-	document.body.append(script);
+	if (!engineScript) {
+		updatePlayButton();
+	} else {
+		const plainSrc = engineScript.getAttribute('src');
+		const useJspi = typeof WebAssembly.Suspending === 'function'
+			&& new URLSearchParams(location.search).get('jspi') !== '0';
+		const loadEngine = (src, fallback) => {
+			const script = document.createElement('script');
+			script.src = src;
+			script.async = true;
+			script.onerror = () => {
+				if (fallback) {
+					log('The fast loading-screen build failed to load. Using the other one.');
+					loadEngine(fallback, null);
+				} else {
+					markEngineFailed();
+				}
+			};
+			document.body.append(script);
+		};
+		loadEngine(useJspi ? plainSrc.replace(/\.js$/, '.jspi.js') : plainSrc, useJspi ? plainSrc : null);
+	}
 })();
 </script>
 </body>

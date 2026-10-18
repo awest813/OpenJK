@@ -87,6 +87,7 @@ typedef double GLclampd;
 #define GL_MAX_TEXTURE_UNITS	0x84E2
 #define GL_TEXTURE_MAX_ANISOTROPY	0x84FE
 #define GL_DOUBLE_				0x140A
+#define GL_STENCIL_INDEX_		0x1901
 
 #define NUM_TEXTURE_UNITS	2
 #define MAX_STACK_DEPTH		32
@@ -499,25 +500,33 @@ static void EnsureContext( void )
 	glActiveTexture( GL_TEXTURE0 + glf.activeTexture );
 }
 
-// Copies data into the stream buffer and returns its offset there.
-static GLintptr StreamUpload( streamBuffer_t *stream, const void *data, GLsizeiptr length )
+static GLsizeiptr Align16( GLsizeiptr length )
 {
-	const GLsizeiptr aligned = ( length + 15 ) & ~15;
+	return ( length + 15 ) & ~15;
+}
 
-	if ( aligned > stream->size )
+// Makes room for `aligned` more bytes (already 16-aligned). One draw uploads
+// several arrays into the same buffer; orphaning between them would drop the
+// earlier ones, so the draw reserves the whole total first.
+static void ReserveStream( streamBuffer_t *stream, GLsizeiptr aligned )
+{
+	if ( aligned <= 0 )
+		return;
+
+	if ( aligned > stream->size || stream->offset + aligned > stream->size )
 	{
-		// grow
 		while ( stream->size < aligned )
 			stream->size *= 2;
 		glBufferData( stream->target, stream->size, NULL, GL_STREAM_DRAW );
 		stream->offset = 0;
 	}
-	else if ( stream->offset + aligned > stream->size )
-	{
-		// start over in a fresh buffer instead of waiting for the old one
-		glBufferData( stream->target, stream->size, NULL, GL_STREAM_DRAW );
-		stream->offset = 0;
-	}
+}
+
+// Copies data into the stream buffer and returns its offset there.
+static GLintptr StreamUpload( streamBuffer_t *stream, const void *data, GLsizeiptr length )
+{
+	const GLsizeiptr aligned = Align16( length );
+	ReserveStream( stream, aligned );
 
 	const GLintptr offset = stream->offset;
 	glBufferSubData( stream->target, offset, length, data );
@@ -673,6 +682,19 @@ static void SetupClientArrays( int numVertices )
 		&glf.vertexArray, &glf.colorArray, &glf.texCoordArray[0], &glf.texCoordArray[1]
 	};
 
+	GLsizeiptr reserved = 0;
+	for ( int attr = 0; attr < NUM_ATTRS; attr++ )
+	{
+		const clientArray_t *array = arrays[attr];
+		if ( !array->enabled || !array->pointer || numVertices <= 0 )
+			continue;
+		const int elementSize = array->size * TypeSize( array->type );
+		const int stride = array->stride ? array->stride : elementSize;
+		const GLsizeiptr length = (GLsizeiptr)( numVertices - 1 ) * stride + elementSize;
+		reserved += Align16( length );
+	}
+	ReserveStream( &glf.vertexStream, reserved );
+
 	for ( int attr = 0; attr < NUM_ATTRS; attr++ )
 	{
 		const clientArray_t *array = arrays[attr];
@@ -718,6 +740,58 @@ static uint32_t *ScratchIndices( int count )
 		glf.scratchIndices = (uint32_t *)realloc( glf.scratchIndices, glf.maxScratchIndices * sizeof( uint32_t ) );
 	}
 	return glf.scratchIndices;
+}
+
+static uint32_t ReadIndex( GLenum type, const GLvoid *indices, int i )
+{
+	if ( type == GL_UNSIGNED_SHORT )
+		return ( (const uint16_t *)indices )[i];
+	if ( type == GL_UNSIGNED_BYTE )
+		return ( (const uint8_t *)indices )[i];
+	return ( (const uint32_t *)indices )[i];
+}
+
+// Indexed quads, quad strips and polygons as triangles. Returns the count.
+static int ExpandIndices( GLenum mode, GLsizei count, GLenum type, const GLvoid *indices, uint32_t *out )
+{
+	int numIndices = 0;
+	if ( mode == GL_QUADS )
+	{
+		for ( int quad = 0; quad + 3 < count; quad += 4 )
+		{
+			const uint32_t v0 = ReadIndex( type, indices, quad );
+			const uint32_t v1 = ReadIndex( type, indices, quad + 1 );
+			const uint32_t v2 = ReadIndex( type, indices, quad + 2 );
+			const uint32_t v3 = ReadIndex( type, indices, quad + 3 );
+			const uint32_t triangles[6] = { v0, v1, v2, v0, v2, v3 };
+			memcpy( out + numIndices, triangles, sizeof( triangles ) );
+			numIndices += 6;
+		}
+	}
+	else if ( mode == GL_QUAD_STRIP )
+	{
+		for ( int i = 0; i + 3 < count; i += 2 )
+		{
+			const uint32_t v0 = ReadIndex( type, indices, i );
+			const uint32_t v1 = ReadIndex( type, indices, i + 1 );
+			const uint32_t v2 = ReadIndex( type, indices, i + 2 );
+			const uint32_t v3 = ReadIndex( type, indices, i + 3 );
+			const uint32_t triangles[6] = { v0, v1, v3, v0, v3, v2 };
+			memcpy( out + numIndices, triangles, sizeof( triangles ) );
+			numIndices += 6;
+		}
+	}
+	else if ( count >= 3 ) // GL_POLYGON, as a triangle fan
+	{
+		const uint32_t first = ReadIndex( type, indices, 0 );
+		for ( int i = 1; i + 1 < count; i++ )
+		{
+			out[numIndices++] = first;
+			out[numIndices++] = ReadIndex( type, indices, i );
+			out[numIndices++] = ReadIndex( type, indices, i + 1 );
+		}
+	}
+	return numIndices;
 }
 
 // Indices that draw quads (or a quad strip) as triangles
@@ -879,8 +953,12 @@ void glfVertex3fv( const GLfloat *v ) { EmitVertex( v[0], v[1], v[2] ); }
 
 void glfTexCoord2f( GLfloat s, GLfloat t )
 {
-	glf.texCoord[0][0] = s;
-	glf.texCoord[0][1] = t;
+	// glTexCoord writes the client-active unit, not always unit 0
+	const int unit = glf.clientActiveTexture;
+	if ( unit < 0 || unit >= NUM_TEXTURE_UNITS )
+		return;
+	glf.texCoord[unit][0] = s;
+	glf.texCoord[unit][1] = t;
 }
 
 void glfTexCoord2fv( const GLfloat *v ) { glfTexCoord2f( v[0], v[1] ); }
@@ -1184,6 +1262,19 @@ void glfDrawElements( GLenum mode, GLsizei count, GLenum type, const GLvoid *ind
 
 	BeginDraw();
 	SetupClientArrays( maxIndex + 1 );
+
+	if ( mode == GL_QUADS || mode == GL_QUAD_STRIP || mode == GL_POLYGON )
+	{
+		uint32_t *expanded = ScratchIndices( count * 3 );
+		const int numIndices = ExpandIndices( mode, count, type, indices, expanded );
+		if ( numIndices )
+		{
+			const GLintptr indexOffset = StreamUpload( &glf.indexStream, expanded, numIndices * sizeof( uint32_t ) );
+			glDrawElements( GL_TRIANGLES, numIndices, GL_UNSIGNED_INT, (const void *)indexOffset );
+		}
+		return;
+	}
+
 	const GLintptr offset = StreamUpload( &glf.indexStream, indices, count * TypeSize( type ) );
 	glDrawElements( mode, count, type, (const void *)offset );
 }
@@ -1334,12 +1425,66 @@ void glfTexParameterfv( GLenum target, GLenum pname, const GLfloat *params )
 	// only border colours, which WebGL doesn't have
 }
 
+// The part of a copy rectangle that lies inside the default framebuffer.
+// WebGL rejects a copy that leaves the canvas, and the single-player renderer
+// treats any GL error as fatal, so an off-screen distortion or shadow copy
+// would end the game. Returns false when nothing overlaps the canvas.
+static bool ClipToDrawingBuffer( GLint *x, GLint *y, GLsizei *width, GLsizei *height )
+{
+	if ( *width <= 0 || *height <= 0 )
+		return false;
+
+	int fbWidth = 0;
+	int fbHeight = 0;
+	emscripten_webgl_get_drawing_buffer_size( emscripten_webgl_get_current_context(), &fbWidth, &fbHeight );
+	if ( fbWidth <= 0 || fbHeight <= 0 )
+		return false;
+
+	if ( *x < 0 )
+	{
+		*width += *x;
+		*x = 0;
+	}
+	if ( *y < 0 )
+	{
+		*height += *y;
+		*y = 0;
+	}
+	if ( *width <= 0 || *height <= 0 || *x >= fbWidth || *y >= fbHeight )
+		return false;
+	if ( *x + *width > fbWidth )
+		*width = fbWidth - *x;
+	if ( *y + *height > fbHeight )
+		*height = fbHeight - *y;
+	return *width > 0 && *height > 0;
+}
+
 void glfCopyTexImage2D( GLenum target, GLint level, GLenum internalformat, GLint x, GLint y,
 	GLsizei width, GLsizei height, GLint border )
 {
-	if ( !IsWebGLTextureTarget( target ) )
+	if ( !IsWebGLTextureTarget( target ) || width <= 0 || height <= 0 )
 		return;
+
 	// the internal format has to match the framebuffer's
+	GLint framebuffer = 0;
+	glGetIntegerv( GL_READ_FRAMEBUFFER_BINDING, &framebuffer );
+	GLint srcX = x;
+	GLint srcY = y;
+	GLsizei srcWidth = width;
+	GLsizei srcHeight = height;
+	const bool clipped = framebuffer || ClipToDrawingBuffer( &srcX, &srcY, &srcWidth, &srcHeight );
+	if ( !clipped )
+	{
+		glTexImage2D( target, level, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL );
+		return;
+	}
+	if ( !framebuffer && ( srcX != x || srcY != y || srcWidth != width || srcHeight != height ) )
+	{
+		// keep the size the renderer asked for; only the on-screen part is copied
+		glTexImage2D( target, level, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL );
+		glCopyTexSubImage2D( target, level, srcX - x, srcY - y, srcX, srcY, srcWidth, srcHeight );
+		return;
+	}
 	glCopyTexImage2D( target, level, GL_RGBA, x, y, width, height, 0 );
 }
 
@@ -1348,14 +1493,34 @@ void glfCopyTexSubImage2D( GLenum target, GLint level, GLint xoffset, GLint yoff
 {
 	if ( !IsWebGLTextureTarget( target ) )
 		return;
+
+	GLint framebuffer = 0;
+	glGetIntegerv( GL_READ_FRAMEBUFFER_BINDING, &framebuffer );
+	if ( !framebuffer )
+	{
+		const GLint srcX = x;
+		const GLint srcY = y;
+		if ( !ClipToDrawingBuffer( &x, &y, &width, &height ) )
+			return;
+		xoffset += x - srcX;
+		yoffset += y - srcY;
+	}
 	glCopyTexSubImage2D( target, level, xoffset, yoffset, x, y, width, height );
 }
 
 void glfReadPixels( GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLvoid *pixels )
 {
+	if ( format == GL_STENCIL_INDEX_ )
+	{
+		// WebGL can't read the stencil buffer
+		memset( pixels, 0, (size_t)width * height * TypeSize( type ) );
+		return;
+	}
+
 	if ( format == GL_DEPTH_COMPONENT )
 	{
-		// WebGL can't read the depth buffer: report everything as far away
+		// WebGL can't read the depth buffer. Flares don't use this; they
+		// depth-test a point (webgl_flare.cpp). A direct read reports far.
 		const size_t count = (size_t)width * height;
 		if ( type == GL_FLOAT )
 		{
@@ -1412,11 +1577,43 @@ void glfGetFloatv( GLenum pname, GLfloat *params ) { glGetFloatv( pname, params 
 void glfClearDepth( GLclampd depth ) { glClearDepthf( (GLfloat)depth ); }
 void glfDepthRange( GLclampd zNear, GLclampd zFar ) { glDepthRangef( (GLfloat)zNear, (GLfloat)zFar ); }
 
+void glfLineWidth( GLfloat width )
+{
+	// WebGL's line width range is often just 1. A wider line is an error, and
+	// the single-player renderer turns any GL error into a fatal shutdown.
+	GLfloat range[2] = { 1.0f, 1.0f };
+	glGetFloatv( GL_ALIASED_LINE_WIDTH_RANGE, range );
+	if ( width < range[0] )
+		width = range[0];
+	else if ( width > range[1] )
+		width = range[1];
+	glLineWidth( width );
+}
+
 void glfDrawBuffer( GLenum mode )
 {
-	// the default framebuffer only has a back buffer
-	GLenum buffer = mode == GL_NONE ? GL_NONE : GL_BACK;
+	// the default framebuffer only has a back buffer; a bound framebuffer
+	// object takes COLOR_ATTACHMENT0 (GL_BACK is invalid there)
+	GLint framebuffer = 0;
+	glGetIntegerv( GL_DRAW_FRAMEBUFFER_BINDING, &framebuffer );
+	GLenum buffer = GL_BACK;
+	if ( mode == GL_NONE )
+		buffer = GL_NONE;
+	else if ( framebuffer )
+		buffer = GL_COLOR_ATTACHMENT0;
 	glDrawBuffers( 1, &buffer );
+}
+
+// Test hook: leaves only `bytes` of room in the vertex stream, so a draw
+// that uploads more than one array has to reserve space up front.
+void glfTesting_LeaveVertexStream( int bytes )
+{
+	EnsureContext();
+	if ( bytes < 0 )
+		bytes = 0;
+	if ( (GLsizeiptr)bytes > glf.vertexStream.size )
+		bytes = (int)glf.vertexStream.size;
+	glf.vertexStream.offset = glf.vertexStream.size - bytes;
 }
 
 // no wireframes, flat shading, attribute stacks or display lists on WebGL;

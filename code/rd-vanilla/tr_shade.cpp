@@ -189,6 +189,11 @@ static void R_DrawElements( int numIndexes, const glIndex_t *indexes ) {
 #endif
 	}
 
+#ifdef __EMSCRIPTEN__
+	// glArrayElement is a no-op on web, so the strip path would draw nothing
+	if ( primitives == 1 )
+		primitives = 2;
+#endif
 
 	if ( primitives == 2 ) {
 		qglDrawElements( GL_TRIANGLES,

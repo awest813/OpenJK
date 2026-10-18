@@ -23,7 +23,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 // cell of a 128x64 canvas and checks the colour in the middle of the cell
 // against what fixed-function OpenGL produces. Run by tools/web/smoke-test.mjs:
 //
-//   em++ -O2 tools/web/qgl-fixed-test.cpp shared/webgl/qgl_fixed.cpp -Ishared \
+//   em++ -O2 tools/web/qgl-fixed-test.cpp shared/webgl/qgl_fixed.cpp \
+//     shared/webgl/webgl_flare.cpp -Ishared \
 //     -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -o qgl-fixed-test.html
 
 #include <GLES3/gl3.h>
@@ -34,6 +35,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 typedef double GLdouble;
 typedef double GLclampd;
 #include "webgl/qgl_fixed.h"
+#include "webgl/webgl_flare.h"
 
 #define GL_QUADS 0x0007
 #define GL_PROJECTION 0x1701
@@ -53,6 +55,8 @@ typedef double GLclampd;
 #define GL_FOG_START 0x0B63
 #define GL_FOG_END 0x0B64
 #define GL_FOG_COLOR 0x0B66
+
+void glfTesting_LeaveVertexStream( int bytes );
 
 static const int width = 128, height = 64, cell = 16;
 static int failures, tests;
@@ -228,6 +232,71 @@ int main()
 	Quad( 32, 16, cell );
 	glDisable( GL_BLEND );
 
+	// row 1, 3: glTexCoord follows the client-active unit. Unit 0 is left at
+	// the black texel; a following glTexCoord on unit 1 must not move it.
+	{
+		const unsigned char pixels[8] = { 0, 0, 0, 255, 255, 255, 255, 255 };
+		GLuint texture;
+		glGenTextures( 1, &texture );
+		glfActiveTexture( GL_TEXTURE0 );
+		glBindTexture( GL_TEXTURE_2D, texture );
+		glfTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA8, 2, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels );
+		glfTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+		glfTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+		glfTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+		glfTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+		glfEnable( GL_TEXTURE_2D );
+		glfTexEnvf( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE );
+		glfDisableClientState( GL_VERTEX_ARRAY );
+		glfDisableClientState( GL_COLOR_ARRAY );
+		glfDisableClientState( GL_TEXTURE_COORD_ARRAY );
+		glfClientActiveTexture( GL_TEXTURE0 );
+		glfTexCoord2f( 0.25f, 0.5f );
+		glfClientActiveTexture( GL_TEXTURE1 );
+		glfTexCoord2f( 0.75f, 0.5f );
+		glfBegin( GL_QUADS );
+		glfVertex2f( 48, 16 );
+		glfVertex2f( 64, 16 );
+		glfVertex2f( 64, 32 );
+		glfVertex2f( 48, 32 );
+		glfEnd();
+		glfClientActiveTexture( GL_TEXTURE0 );
+		glfDisable( GL_TEXTURE_2D );
+	}
+
+	// row 1, 4: glDrawElements of a quad, which WebGL cannot draw directly
+	{
+		const float xyz[4][2] = { { 64, 16 }, { 80, 16 }, { 80, 32 }, { 64, 32 } };
+		const unsigned char colors[4][4] = {
+			{ 0, 255, 255, 255 }, { 0, 255, 255, 255 }, { 0, 255, 255, 255 }, { 0, 255, 255, 255 }
+		};
+		const unsigned short indices[4] = { 0, 1, 2, 3 };
+		glfEnableClientState( GL_VERTEX_ARRAY );
+		glfVertexPointer( 2, GL_FLOAT, 0, xyz );
+		glfEnableClientState( GL_COLOR_ARRAY );
+		glfColorPointer( 4, GL_UNSIGNED_BYTE, 0, colors );
+		glfDrawElements( GL_QUADS, 4, GL_UNSIGNED_SHORT, indices );
+		glfDisableClientState( GL_VERTEX_ARRAY );
+		glfDisableClientState( GL_COLOR_ARRAY );
+	}
+
+	// row 1, 5: two client arrays that don't fit in the room left in the
+	// stream. Reserving both up front keeps the position data.
+	{
+		const float xyz[4][2] = { { 80, 16 }, { 96, 16 }, { 96, 32 }, { 80, 32 } };
+		const unsigned char colors[4][4] = {
+			{ 255, 0, 255, 255 }, { 255, 0, 255, 255 }, { 255, 0, 255, 255 }, { 255, 0, 255, 255 }
+		};
+		glfTesting_LeaveVertexStream( 40 );
+		glfEnableClientState( GL_VERTEX_ARRAY );
+		glfVertexPointer( 2, GL_FLOAT, 0, xyz );
+		glfEnableClientState( GL_COLOR_ARRAY );
+		glfColorPointer( 4, GL_UNSIGNED_BYTE, 0, colors );
+		glfDrawArrays( GL_QUADS, 0, 4 );
+		glfDisableClientState( GL_VERTEX_ARRAY );
+		glfDisableClientState( GL_COLOR_ARRAY );
+	}
+
 	Expect( "constant colour", 0, 0, 255, 0, 0 );
 	Expect( "GL_MODULATE", 1, 0, 0, 128, 0 );
 	Expect( "GL_REPLACE", 2, 0, 0, 255, 0 );
@@ -249,6 +318,198 @@ int main()
 	}
 	Expect( "multitexture GL_ADD", 1, 1, 255, 128, 0 );
 	Expect( "blending", 2, 1, 128, 128, 128 );
+	Expect( "texcoord client unit", 3, 1, 0, 0, 0 );
+	Expect( "draw elements quads", 4, 1, 0, 255, 255 );
+	Expect( "stream reserve", 5, 1, 255, 0, 255 );
+
+	// Flare occlusion. WebGL cannot read depth, so the test draws one point.
+	// Column 6 is a surface at window depth 0.25; column 7 is the clear value.
+	// Projection is perspective, near 1, far 101. A light at eye z -50 is
+	// behind that surface (hidden) and in front of the clear depth (shown).
+	// A light at eye z -10 is within 24 units of every stored surface.
+	{
+		GLint savedProgram = 0;
+		glGetIntegerv( GL_CURRENT_PROGRAM, &savedProgram );
+
+		const GLuint occluder = glCreateProgram();
+		const GLuint vs = glCreateShader( GL_VERTEX_SHADER );
+		const GLuint fs = glCreateShader( GL_FRAGMENT_SHADER );
+		const char *vsrc =
+			"#version 300 es\n"
+			"layout(location=0) in vec3 p;\n"
+			"void main() { gl_Position = vec4(p, 1.0); }\n";
+		const char *fsrc =
+			"#version 300 es\n"
+			"precision highp float;\n"
+			"out vec4 c;\n"
+			"void main() { c = vec4(1.0, 0.0, 0.0, 1.0); }\n";
+		glShaderSource( vs, 1, &vsrc, NULL );
+		glShaderSource( fs, 1, &fsrc, NULL );
+		glCompileShader( vs );
+		glCompileShader( fs );
+		glAttachShader( occluder, vs );
+		glAttachShader( occluder, fs );
+		glLinkProgram( occluder );
+		glDeleteShader( vs );
+		glDeleteShader( fs );
+
+		const float quad[] = {
+			0.50f, 0.0f, -0.5f,
+			0.75f, 0.0f, -0.5f,
+			0.50f, 0.5f, -0.5f,
+			0.75f, 0.5f, -0.5f
+		};
+		GLuint vao = 0, buf = 0;
+		glGenVertexArrays( 1, &vao );
+		glGenBuffers( 1, &buf );
+		glBindVertexArray( vao );
+		glBindBuffer( GL_ARRAY_BUFFER, buf );
+		glBufferData( GL_ARRAY_BUFFER, sizeof( quad ), quad, GL_STATIC_DRAW );
+		glEnableVertexAttribArray( 0 );
+		glVertexAttribPointer( 0, 3, GL_FLOAT, GL_FALSE, 0, 0 );
+		glUseProgram( occluder );
+		glEnable( GL_DEPTH_TEST );
+		glDepthFunc( GL_LEQUAL );
+		glDepthMask( GL_TRUE );
+		glDrawArrays( GL_TRIANGLE_STRIP, 0, 4 );
+		glDisable( GL_DEPTH_TEST );
+		glUseProgram( savedProgram );
+		glBindVertexArray( 0 );
+		glDeleteProgram( occluder );
+
+		const int surfaceX = 6 * cell + cell / 2;
+		const int emptyX = 7 * cell + cell / 2;
+		const int pixelY = height - ( 1 * cell + cell / 2 ) - 1;
+		unsigned char surface[4];
+		glPixelStorei( GL_PACK_ALIGNMENT, 1 );
+		glReadPixels( surfaceX, pixelY, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, surface );
+
+		// m10 = -(f+n)/(f-n), m11 = -1, m14 = -2fn/(f-n), n = 1, f = 101
+		float projection[16] = { 0 };
+		projection[0] = 1.0f;
+		projection[5] = 1.0f;
+		projection[10] = -1.02f;
+		projection[11] = -1.0f;
+		projection[14] = -2.02f;
+
+		glDepthFunc( GL_GREATER );
+		const int hidden = WebGL_FlareVisible( surfaceX, pixelY, -50.0f, projection );
+		const int shown = WebGL_FlareVisible( emptyX, pixelY, -50.0f, projection );
+		const int closeLight = WebGL_FlareVisible( surfaceX, pixelY, -10.0f, projection );
+
+		unsigned char surfaceAfter[4], emptyAfter[4];
+		glReadPixels( surfaceX, pixelY, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, surfaceAfter );
+		glReadPixels( emptyX, pixelY, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, emptyAfter );
+		GLint programAfter = 0;
+		GLint depthFunc = 0;
+		glGetIntegerv( GL_CURRENT_PROGRAM, &programAfter );
+		glGetIntegerv( GL_DEPTH_FUNC, &depthFunc );
+		const GLenum error = glGetError();
+
+		tests++;
+		const bool ok = surface[0] == 255 && surface[1] == 0
+			&& hidden == 0 && shown == 1 && closeLight == 1
+			&& surfaceAfter[0] == 255 && surfaceAfter[1] == 0 && surfaceAfter[2] == 0
+			&& emptyAfter[0] == 0 && emptyAfter[1] == 0 && emptyAfter[2] == 0
+			&& programAfter == savedProgram
+			&& depthFunc == GL_GREATER
+			&& !glIsEnabled( GL_SCISSOR_TEST )
+			&& !glIsEnabled( GL_DEPTH_TEST )
+			&& error == GL_NO_ERROR;
+		failures += !ok;
+		printf( "%s flare depth: hidden %d shown %d close %d surface %d %d %d empty %d %d %d func %d err %d\n",
+			ok ? "PASS" : "FAIL", hidden, shown, closeLight,
+			surfaceAfter[0], surfaceAfter[1], surfaceAfter[2],
+			emptyAfter[0], emptyAfter[1], emptyAfter[2], depthFunc, error );
+		glDepthFunc( GL_LESS );
+
+		// The same test against an RGBA16F target, which is what rend2 binds
+		// when HDR is on and where an 8-bit readPixels would be invalid.
+		emscripten_webgl_enable_extension( context, "EXT_color_buffer_float" );
+		GLuint colorTex = 0, depthTex = 0, fbo = 0;
+		glGenTextures( 1, &colorTex );
+		glBindTexture( GL_TEXTURE_2D, colorTex );
+		glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA16F, 16, 16, 0, GL_RGBA, GL_FLOAT, NULL );
+		glGenTextures( 1, &depthTex );
+		glBindTexture( GL_TEXTURE_2D, depthTex );
+		glTexImage2D( GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, 16, 16, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, NULL );
+		glGenFramebuffers( 1, &fbo );
+		glBindFramebuffer( GL_FRAMEBUFFER, fbo );
+		glFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTex, 0 );
+		glFramebufferTexture2D( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTex, 0 );
+		const GLenum fboStatus = glCheckFramebufferStatus( GL_FRAMEBUFFER );
+		if ( fboStatus != GL_FRAMEBUFFER_COMPLETE )
+		{
+			printf( "SKIP flare float: framebuffer %x\n", fboStatus );
+			glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+		}
+		else
+		{
+			glViewport( 0, 0, 16, 16 );
+			glClearColor( 0, 0, 0, 1 );
+			glClearDepthf( 1 );
+			glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+			const GLuint floatProg = glCreateProgram();
+			const GLuint fvs = glCreateShader( GL_VERTEX_SHADER );
+			const GLuint ffs = glCreateShader( GL_FRAGMENT_SHADER );
+			glShaderSource( fvs, 1, &vsrc, NULL );
+			glShaderSource( ffs, 1, &fsrc, NULL );
+			glCompileShader( fvs );
+			glCompileShader( ffs );
+			glAttachShader( floatProg, fvs );
+			glAttachShader( floatProg, ffs );
+			glLinkProgram( floatProg );
+			glDeleteShader( fvs );
+			glDeleteShader( ffs );
+			const float left[] = {
+				-1.0f, -1.0f, -0.5f,
+				0.0f, -1.0f, -0.5f,
+				-1.0f, 1.0f, -0.5f,
+				0.0f, 1.0f, -0.5f
+			};
+			glBindBuffer( GL_ARRAY_BUFFER, buf );
+			glBufferData( GL_ARRAY_BUFFER, sizeof( left ), left, GL_STATIC_DRAW );
+			glBindVertexArray( vao );
+			glUseProgram( floatProg );
+			glEnable( GL_DEPTH_TEST );
+			glDrawArrays( GL_TRIANGLE_STRIP, 0, 4 );
+			glDisable( GL_DEPTH_TEST );
+			glUseProgram( savedProgram );
+			glBindVertexArray( 0 );
+
+			const int floatHidden = WebGL_FlareVisible( 2, 8, -50.0f, projection );
+			const int floatShown = WebGL_FlareVisible( 12, 8, -50.0f, projection );
+			float leftPx[4], rightPx[4];
+			glReadPixels( 2, 8, 1, 1, GL_RGBA, GL_FLOAT, leftPx );
+			glReadPixels( 12, 8, 1, 1, GL_RGBA, GL_FLOAT, rightPx );
+			const GLenum floatError = glGetError();
+			tests++;
+			const bool floatOk = floatHidden == 0 && floatShown == 1
+				&& leftPx[0] > 0.9f && leftPx[1] < 0.1f && leftPx[2] < 0.1f
+				&& rightPx[0] < 0.1f && rightPx[1] < 0.1f && rightPx[2] < 0.1f
+				&& floatError == GL_NO_ERROR;
+			failures += !floatOk;
+			printf( "%s flare float: hidden %d shown %d left %.2f %.2f %.2f right %.2f %.2f %.2f err %d\n",
+				floatOk ? "PASS" : "FAIL", floatHidden, floatShown,
+				leftPx[0], leftPx[1], leftPx[2], rightPx[0], rightPx[1], rightPx[2], floatError );
+
+			glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+			glViewport( 0, 0, width, height );
+			glDeleteProgram( floatProg );
+		}
+		glDeleteFramebuffers( 1, &fbo );
+		glDeleteTextures( 1, &colorTex );
+		glDeleteTextures( 1, &depthTex );
+		glDeleteVertexArray( vao );
+		glDeleteBuffers( 1, &buf );
+		glBindTexture( GL_TEXTURE_2D, 0 );
+		while ( glGetError() != GL_NO_ERROR )
+			;
+
+		glfColor4f( 1, 1, 0, 1 );
+		Quad( 7 * cell, cell, cell );
+		Expect( "flare state restored", 7, 1, 255, 255, 0 );
+	}
 
 	printf( "qgl_fixed: %d of %d tests passed\n", tests - failures, tests );
 	return 0;

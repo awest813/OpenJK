@@ -149,6 +149,13 @@ set(MPRend2Files
 	${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp)
 
 set(MPRend2IncludeDirectories ${MPRend2IncludeDirectories} ${OpenJKLibDir})
+if(EMSCRIPTEN)
+	# flare occlusion without a depth readback, which WebGL cannot do
+	set(MPRend2Files
+		${MPRend2Files}
+		"${SharedDir}/webgl/webgl_flare.cpp"
+		"${SharedDir}/webgl/webgl_flare.h")
+endif()
 add_library(${MPRend2} ${OpenJKModuleLibraryType} ${MPRend2Files})
 
 if(NOT MSVC)

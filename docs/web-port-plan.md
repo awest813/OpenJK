@@ -41,7 +41,17 @@ this environment's proxy).
 Players add the `.pk3` files of their own copy of the game on the launcher
 page; they are stored in the browser (OPFS) and loaded into memory on
 Play, so a full install needs ~1.5 GB of RAM. Configs and saves live in
-IndexedDB.
+IndexedDB. The landing page and each client share one launcher: a mode
+switch (single player, multiplayer, experimental rend2), status for WebGL,
+the engine, and `assets0.pk3`–`assets3.pk3`, and the file list grouped by
+directory. Once any file is stored, Play is the first card. Removing a file
+or a whole directory asks on the button itself. Loose files and any
+folder that contains the retail packs are stored as `base`. A folder of
+other pk3s keeps its name, so choosing a mod folder stores that mod. The mouse is captured only while the game asks for
+mouselook (a request that isn't a click shows a button, and menus are not
+covered). The canvas keeps the picture's aspect ratio, so the cursor lines
+up when the window is a different shape. While the game is focused, the
+page keeps the browser from scrolling or leaving on a key the game also uses.
 
 ### How it works
 
@@ -71,8 +81,9 @@ IndexedDB.
 - **Console**: `con_passive.cpp`, never stdin (Emscripten would open
   `window.prompt()` dialogs).
 - **Files**: `shared/web/shell.html` is the launcher and Emscripten shell
-  for all clients; `FS_FCloseFile` tells it to sync the home directory to
-  IndexedDB after writes.
+  for all clients. Closing a file that was opened for writing, or renaming
+  or deleting one, tells the page to sync the home directory to IndexedDB.
+  Reads do not.
 - **Networking** (MP): `codemp/qcommon/net_web.cpp` replaces `net_ip.cpp`.
   Datagrams go over one WebSocket to `tools/web/server.js`, which sends
   them on as UDP; host names get placeholder addresses the relay
@@ -98,6 +109,11 @@ IndexedDB.
 
   This replaced Emscripten's `LEGACY_GL_EMULATION`, which rendered even
   the console as stray triangles.
+
+  WebGL cannot read the depth buffer. `shared/webgl/webgl_flare.cpp`
+  occludes flares by depth-testing one pixel at the light, with the same
+  24-unit slack the desktop readback uses, and puts that pixel back.
+  rend2 uses the same test when flares are turned on.
 - **rd-rend2 on WebGL 2** (separate client, because rd-vanilla needs the
   GL emulation and rend2 must not have it):
   - WebGL 2 function lookup with stand-ins for what WebGL lacks;

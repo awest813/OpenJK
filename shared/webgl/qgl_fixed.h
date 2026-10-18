@@ -91,6 +91,7 @@ void glfGetFloatv( GLenum pname, GLfloat *params );
 void glfClearDepth( GLclampd depth );
 void glfDepthRange( GLclampd zNear, GLclampd zFar );
 void glfDrawBuffer( GLenum mode );
+void glfLineWidth( GLfloat width );
 void glfPolygonMode( GLenum face, GLenum mode );
 void glfShadeModel( GLenum mode );
 void glfPushAttrib( GLbitfield mask );

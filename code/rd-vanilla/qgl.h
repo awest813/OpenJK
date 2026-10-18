@@ -540,6 +540,8 @@ extern PFNGLUNLOCKARRAYSEXTPROC qglUnlockArraysEXT;
 #define qglDepthRange glfDepthRange
 #undef qglDrawBuffer
 #define qglDrawBuffer glfDrawBuffer
+#undef qglLineWidth
+#define qglLineWidth glfLineWidth
 #undef qglPolygonMode
 #define qglPolygonMode glfPolygonMode
 #undef qglShadeModel
