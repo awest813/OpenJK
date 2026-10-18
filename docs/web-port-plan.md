@@ -109,6 +109,11 @@ page keeps the browser from scrolling or leaving on a key the game also uses.
 
   This replaced Emscripten's `LEGACY_GL_EMULATION`, which rendered even
   the console as stray triangles.
+
+  WebGL cannot read the depth buffer. `shared/webgl/webgl_flare.cpp`
+  occludes flares by depth-testing one pixel at the light, with the same
+  24-unit slack the desktop readback uses, and puts that pixel back.
+  rend2 uses the same test when flares are turned on.
 - **rd-rend2 on WebGL 2** (separate client, because rd-vanilla needs the
   GL emulation and rend2 must not have it):
   - WebGL 2 function lookup with stand-ins for what WebGL lacks;

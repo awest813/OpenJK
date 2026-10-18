@@ -1519,7 +1519,8 @@ void glfReadPixels( GLint x, GLint y, GLsizei width, GLsizei height, GLenum form
 
 	if ( format == GL_DEPTH_COMPONENT )
 	{
-		// WebGL can't read the depth buffer: report everything as far away
+		// WebGL can't read the depth buffer. Flares don't use this; they
+		// depth-test a point (webgl_flare.cpp). A direct read reports far.
 		const size_t count = (size_t)width * height;
 		if ( type == GL_FLOAT )
 		{

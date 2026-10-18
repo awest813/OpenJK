@@ -114,7 +114,9 @@ if(EMSCRIPTEN)
 	# the OpenGL 1.x the renderer uses, on WebGL 2
 	set(MPVanillaRendererWebGLFiles
 		"${SharedDir}/webgl/qgl_fixed.cpp"
-		"${SharedDir}/webgl/qgl_fixed.h")
+		"${SharedDir}/webgl/qgl_fixed.h"
+		"${SharedDir}/webgl/webgl_flare.cpp"
+		"${SharedDir}/webgl/webgl_flare.h")
 	source_group("webgl" FILES ${MPVanillaRendererWebGLFiles})
 	set(MPVanillaRendererFiles ${MPVanillaRendererFiles} ${MPVanillaRendererWebGLFiles})
 endif()

@@ -22,6 +22,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // tr_flares.c
 
 #include "tr_local.h"
+#ifdef __EMSCRIPTEN__
+#include "webgl/webgl_flare.h"
+#endif
 
 /*
 =============================================================================
@@ -254,10 +257,8 @@ RB_TestFlare
 ==================
 */
 void RB_TestFlare( flare_t *f ) {
-	float			depth;
 	qboolean		visible;
 	float			fade;
-	float			screenZ;
 	FBO_t           *oldFbo;
 
 	backEnd.pc.c_flareTests++;
@@ -269,20 +270,28 @@ void RB_TestFlare( flare_t *f ) {
 		FBO_Bind(tr.msaaResolveFbo);
 	}
 
+#ifdef __EMSCRIPTEN__
+	// WebGL cannot read depth. One point at the same 24-unit slack answers it.
+	visible = (qboolean)WebGL_FlareVisible( f->windowX, f->windowY, f->eyeZ,
+		backEnd.viewParms.projectionMatrix );
+#else
 	// read back the z buffer contents, which is bad
 	// TODO: Don't use glReadPixels
+	float			depth;
+	float			screenZ;
 	qglReadPixels( f->windowX, f->windowY, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &depth );
+
+	screenZ = backEnd.viewParms.projectionMatrix[14] /
+		( ( 2*depth - 1 ) * backEnd.viewParms.projectionMatrix[11] - backEnd.viewParms.projectionMatrix[10] );
+
+	visible = (qboolean)(( -f->eyeZ - -screenZ ) < 24);
+#endif
 
 	// if we're doing multisample rendering, switch to the old FBO
 	if (tr.msaaResolveFbo)
 	{
 		FBO_Bind(oldFbo);
 	}
-
-	screenZ = backEnd.viewParms.projectionMatrix[14] /
-		( ( 2*depth - 1 ) * backEnd.viewParms.projectionMatrix[11] - backEnd.viewParms.projectionMatrix[10] );
-
-	visible = (qboolean)(( -f->eyeZ - -screenZ ) < 24);
 
 	if ( visible ) {
 		if ( !f->visible ) {

@@ -153,7 +153,9 @@ if(BuildSPRdVanilla OR BuildJK2SPRdVanilla)
 		# the OpenGL 1.x the renderer uses, on WebGL 2
 		set(SPRDVanillaWebGLFiles
 			"${SharedDir}/webgl/qgl_fixed.cpp"
-			"${SharedDir}/webgl/qgl_fixed.h")
+			"${SharedDir}/webgl/qgl_fixed.h"
+			"${SharedDir}/webgl/webgl_flare.cpp"
+			"${SharedDir}/webgl/webgl_flare.h")
 		source_group("webgl" FILES ${SPRDVanillaWebGLFiles})
 		set(SPRDVanillaFiles ${SPRDVanillaFiles} ${SPRDVanillaWebGLFiles})
 	endif()
