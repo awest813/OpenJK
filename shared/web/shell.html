@@ -234,7 +234,7 @@ IndexedDB.
 	<section id="data-section" aria-labelledby="data-heading">
 		<div class="section-head">
 			<h2 id="data-heading">Game data</h2>
-			<p class="muted small" id="data-blurb">Add the .pk3 files from <span class="path">GameData/base</span> in your own Jedi Academy install. They stay in this browser. A folder named Base is stored as <span class="path">base</span>. A mod keeps its own directory, such as <span class="path">mymod/something.pk3</span>.</p>
+			<p class="muted small" id="data-blurb">Add the .pk3 files from your own Jedi Academy install. They stay in this browser. Loose files, and any folder that contains the retail packs, are stored in <span class="path">base</span>. A folder of other pk3s keeps its name, so choosing a mod folder stores <span class="path">mymod/something.pk3</span>.</p>
 		</div>
 
 		<div id="drop">
@@ -513,28 +513,55 @@ IndexedDB.
 		},
 	};
 
-	// Where a picked file goes: "base/assets0.pk3", "mymod/zz.pk3", ... or null
+	// Where a picked file goes: "base/assets0.pk3", "mymod/zz.pk3", ... or null.
+	// A path that still contains "." or ".." is rejected. "base" is found by
+	// name, in any case, wherever it sits (GameData/Base, or a parent folder).
+	// With no base directory, a GameData wrapper is dropped and what remains
+	// is mod/file. A bare filename goes in base. pathsFor() then moves a
+	// folder of the retail packs into base even when that folder has another name.
 	function gamePathFor(relativePath) {
-		const parts = relativePath.split('/').filter(Boolean);
-		if (parts.length > 1) {
-			parts.shift(); // the folder that was picked or dropped
-		}
-		const known = parts.map((part) => part.toLowerCase()).lastIndexOf('base');
-		if (known > 0) {
-			parts.splice(0, known); // ".../GameData/base/x.pk3" -> "base/x.pk3"
-		}
-		if (parts.length === 1) {
-			parts.unshift('base');
-		}
-		// the engine's directory is "base", and the comparison is case sensitive
-		if (parts.length === 2 && parts[0].toLowerCase() === 'base') {
-			parts[0] = 'base';
-		}
-		// ".." is not a directory the browser will create, and it must not be stored
-		if (parts.some((part) => part === '.' || part === '..')) {
+		let parts = relativePath.split('/').filter(Boolean);
+		if (!parts.length || parts.some((part) => part === '.' || part === '..')) {
 			return null;
 		}
-		return parts.length === 2 ? parts.join('/') : null;
+		const baseAt = parts.map((part) => part.toLowerCase()).lastIndexOf('base');
+		if (baseAt >= 0) {
+			const rest = parts.slice(baseAt);
+			return rest.length === 2 ? 'base/' + rest[1] : null;
+		}
+		if (parts.length >= 3 && parts[1].toLowerCase() === 'gamedata') {
+			parts = parts.slice(2);
+		} else if (parts.length >= 2 && parts[0].toLowerCase() === 'gamedata') {
+			parts = parts.slice(1);
+		} else if (parts.length >= 3) {
+			parts = parts.slice(1);
+		}
+		if (parts.length === 1) {
+			return 'base/' + parts[0];
+		}
+		if (parts.length === 2) {
+			return parts[0].toLowerCase() === 'base' ? 'base/' + parts[1] : parts.join('/');
+		}
+		return null;
+	}
+
+	// Retail packs belong in base even if the folder they came from is not named base.
+	function pathsFor(picked) {
+		const files = picked
+			.filter(({ file }) => /\.pk3$/i.test(file.name))
+			.map(({ file, relativePath }) => ({ file, path: gamePathFor(relativePath) }))
+			.filter(({ path }) => path);
+		const dirs = new Set(files.map((entry) => entry.path.slice(0, entry.path.indexOf('/'))));
+		if (dirs.size === 1) {
+			const dir = [...dirs][0];
+			const retail = files.some((entry) => /^assets[0-3]\.pk3$/i.test(entry.path.slice(dir.length + 1)));
+			if (dir !== 'base' && retail) {
+				for (const entry of files) {
+					entry.path = 'base/' + entry.path.slice(dir.length + 1);
+				}
+			}
+		}
+		return files;
 	}
 
 	// Files from a drop, including the contents of dropped folders
@@ -571,14 +598,13 @@ IndexedDB.
 		if (busy || started) {
 			return;
 		}
-		const files = picked
-			.filter(({ file }) => /\.pk3$/i.test(file.name))
-			.map(({ file, relativePath }) => ({ file, path: gamePathFor(relativePath) }))
-			.filter(({ path }) => path);
+		const files = pathsFor(picked);
 		if (!files.length) {
 			setStatus('No .pk3 files there. Look in the GameData/base folder of your Jedi Academy install.', true);
 			return;
 		}
+		const storedDirs = [...new Set(files.map((entry) => entry.path.slice(0, entry.path.indexOf('/'))))];
+		const storedWhere = storedDirs.length === 1 ? ` to ${storedDirs[0]}` : '';
 
 		// skip files that are already stored with the same size
 		const known = new Map(storedFiles.map((entry) => [entry.path.toLowerCase(), entry.size]));
@@ -603,7 +629,7 @@ IndexedDB.
 			}
 			setStatus(!stored && skipped
 				? `${plural(skipped, 'file')} already stored.`
-				: `Added ${plural(stored, 'file')}${skipped ? `, ${skipped} already stored` : ''}.`);
+				: `Added ${plural(stored, 'file')}${storedWhere}${skipped ? `, ${skipped} already stored` : ''}.`);
 		} catch (error) {
 			const full = error && error.name === 'QuotaExceededError';
 			setStatus(full
@@ -814,7 +840,7 @@ IndexedDB.
 		if (dropText) {
 			dropText.textContent = storedFiles.length
 				? 'Drop more .pk3 files, or choose them'
-				: 'Drop .pk3 files or your GameData folder here';
+				: 'Drop .pk3 files, your GameData folder, or a mod folder';
 		}
 
 		const chips = $('readiness');

@@ -45,8 +45,9 @@ IndexedDB. The landing page and each client share one launcher: a mode
 switch (single player, multiplayer, experimental rend2), status for WebGL,
 the engine, and `assets0.pk3`–`assets3.pk3`, and the file list grouped by
 directory. Once any file is stored, Play is the first card. Removing a file
-or a whole directory asks on the button itself. A folder named `Base` is
-stored as `base`. The mouse is captured only while the game asks for
+or a whole directory asks on the button itself. Loose files and any
+folder that contains the retail packs are stored as `base`. A folder of
+other pk3s keeps its name, so choosing a mod folder stores that mod. The mouse is captured only while the game asks for
 mouselook (a request that isn't a click shows a button, and menus are not
 covered). The canvas keeps the picture's aspect ratio, so the cursor lines
 up when the window is a different shape. While the game is focused, the
