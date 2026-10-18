@@ -45,6 +45,8 @@ IndexedDB. The mouse is captured only while the game asks for mouselook
 (a request that isn't a click shows a button, and menus are not covered).
 The canvas keeps the picture's aspect ratio, so the cursor lines up when
 the window is a different shape. A folder named `Base` is stored as `base`.
+While the game is focused, the page keeps the browser from scrolling or
+leaving on a key the game also uses.
 
 ### How it works
 

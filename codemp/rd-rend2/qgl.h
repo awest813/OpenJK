@@ -618,16 +618,43 @@ extern PFNGLGETQUERYOBJECTI64VPROC qglGetQueryObjecti64v;
 extern PFNGLGETQUERYOBJECTUI64VPROC qglGetQueryObjectui64v;
 
 #ifdef __EMSCRIPTEN__
-// WebGL 2 only has glDrawBuffers, and no front buffer
+// WebGL 2 only has glDrawBuffers. The default framebuffer's back buffer is
+// GL_BACK; a bound framebuffer takes a color attachment (GL_BACK is invalid
+// there). GL_NONE is how depth-only targets disable color writes.
 #undef qglDrawBuffer
 static inline void qglDrawBuffer( GLenum mode )
 {
-	if ( mode == GL_FRONT || mode == GL_FRONT_AND_BACK )
+	GLint framebuffer = 0;
+	if ( mode != GL_NONE )
+		glGetIntegerv( GL_DRAW_FRAMEBUFFER_BINDING, &framebuffer );
+
+	if ( mode == GL_NONE
+		|| ( mode >= GL_COLOR_ATTACHMENT0 && mode < GL_COLOR_ATTACHMENT0 + 16 ) )
+	{
+		// already something WebGL can draw to
+	}
+	else if ( framebuffer )
+		mode = GL_COLOR_ATTACHMENT0;
+	else
 		mode = GL_BACK;
+
 	qglDrawBuffers( 1, &mode );
 }
 
 // no wireframe rendering in WebGL
 #undef qglPolygonMode
 static inline void qglPolygonMode( GLenum face, GLenum mode ) {}
+
+// WebGL's line width range is often just 1; anything else is an error
+#undef qglLineWidth
+static inline void qglLineWidth( GLfloat width )
+{
+	GLfloat range[2] = { 1.0f, 1.0f };
+	glGetFloatv( GL_ALIASED_LINE_WIDTH_RANGE, range );
+	if ( width < range[0] )
+		width = range[0];
+	else if ( width > range[1] )
+		width = range[1];
+	glLineWidth( width );
+}
 #endif

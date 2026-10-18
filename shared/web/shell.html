@@ -426,6 +426,10 @@ IndexedDB.
 		if (parts.length === 2 && parts[0].toLowerCase() === 'base') {
 			parts[0] = 'base';
 		}
+		// ".." is not a directory the browser will create, and it must not be stored
+		if (parts.some((part) => part === '.' || part === '..')) {
+			return null;
+		}
 		return parts.length === 2 ? parts.join('/') : null;
 	}
 
@@ -665,8 +669,11 @@ IndexedDB.
 
 		// render at the window's size (capped), scaled to fit by CSS
 		const scale = Math.min(window.devicePixelRatio || 1, 2);
-		const width = Math.min(Math.round(window.innerWidth * scale), 2560) & ~1;
-		const height = Math.min(Math.round(window.innerHeight * scale), 1440) & ~1;
+		let width = Math.min(Math.round(window.innerWidth * scale), 2560) & ~1;
+		let height = Math.min(Math.round(window.innerHeight * scale), 1440) & ~1;
+		// a window that has not been laid out yet would ask the engine for 0×0
+		if (width < 640) width = 640;
+		if (height < 480) height = 480;
 
 		// filled in place: the runtime took its reference to the array at load
 		Module.arguments.push(
@@ -879,11 +886,59 @@ IndexedDB.
 		requestPointerLock.call($('canvas'));
 		focusGame();
 	};
-	$('canvas').addEventListener('mousedown', () => {
+	$('canvas').addEventListener('mousedown', (event) => {
+		// middle-click would otherwise start the browser's autoscroll.
+		// preventDefault also skips focusing the canvas, so do that ourselves.
+		event.preventDefault();
+		focusGame();
 		resumeAudio();
 		if (pointerLockWanted && document.pointerLockElement !== $('canvas')) {
 			requestPointerLock.call($('canvas'));
 		}
+	});
+	$('canvas').addEventListener('wheel', (event) => {
+		if (!$('game').hidden) {
+			event.preventDefault();
+		}
+	}, { passive: false });
+
+	// While the game is what's focused, the browser must not scroll, move
+	// focus, or leave the page on a key the game also uses.
+	function gameHasKeyFocus() {
+		if ($('game').hidden || !$('error').hidden) {
+			return false;
+		}
+		const target = document.activeElement;
+		if (!target || target === document.body || target === document.documentElement || target === $('canvas')) {
+			return true;
+		}
+		const tag = target.tagName;
+		return tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'BUTTON' && tag !== 'A' && !target.isContentEditable;
+	}
+	addEventListener('keydown', (event) => {
+		if ($('game').hidden) {
+			return;
+		}
+		resumeAudio();
+		if (!gameHasKeyFocus()) {
+			return;
+		}
+		const key = event.key;
+		const leaves = event.altKey || event.metaKey
+			|| (event.ctrlKey && /^(w|r|t|n|l|f|p|s|o|g|h|j|d|u)$/i.test(key));
+		const scrolls = key === ' ' || key === 'Tab' || key === 'Backspace'
+			|| key.startsWith('Arrow') || key === 'PageUp' || key === 'PageDown'
+			|| key === 'Home' || key === 'End';
+		if (leaves || scrolls) {
+			event.preventDefault();
+		}
+	});
+	addEventListener('beforeunload', (event) => {
+		if (!started || !$('error').hidden) {
+			return;
+		}
+		event.preventDefault();
+		event.returnValue = '';
 	});
 
 	updatePlayButton();
